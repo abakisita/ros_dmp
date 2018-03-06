@@ -55,7 +55,7 @@ def save_trajectory():
     global position
     global velocity
     global acceleration
-    data = {'positions': np.asarray(position).tolist(), 'velocitys': np.asarray(velocity).tolist(),
+    data = {'positions': np.asarray(position).tolist(), 'velocities': np.asarray(velocity).tolist(),
             'accelerations': np.asarray(acceleration).tolist()}
     file = path + "trajectory_joint.yaml"
     with open(file, "w") as f:
