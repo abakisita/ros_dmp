@@ -30,7 +30,8 @@ def callback(data):
     if count == 0:
         print("trajectory recorded once")
         message.trajectory = copy.deepcopy(data.goal.trajectory)
-        
+    
+    count += 1
 
 def main():
     global message
