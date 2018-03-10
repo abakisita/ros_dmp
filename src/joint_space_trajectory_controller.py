@@ -4,10 +4,13 @@ import numpy as np
 import tf
 import yaml
 
+import mcr_manipulation_utils_ros.kinematics as kinematics
+
 import geometry_msgs
 from geometry_msgs.msg import TwistStamped
 from control_msgs.msg import FollowJointTrajectoryActionGoal
 from trajectory_msgs.msg import JointTrajectoryPoint
+
 
 
 def load_trajectory():
