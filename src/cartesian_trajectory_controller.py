@@ -3,11 +3,14 @@ import rospy
 import numpy as np
 import tf
 import yaml
-
+import time
 import geometry_msgs
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import TwistStamped, PointStamped
+from visualization_msgs.msg import Marker
 
-
+all_markers_recieved = False
+marker_list = []
+marker_position = []
 def load_trajectory():
     path = "../data/"
 
@@ -19,9 +22,42 @@ def load_trajectory():
     trajectory = np.array(trajectory)
     return trajectory_rot, trajectory
 
+def marker_callback(msg):
+    global all_markers_recieved
+    global marker_list
+    global marker_position
+    duplicate = False
+    if len(marker_list) == 0:
+        marker_list.append(msg.id)
+        marker_position.append(msg)
+        duplicate = True
+    else:
+        for i in marker_list:
+            if i == msg.id:
+                duplicate = True
+    if duplicate == False:
+        marker_list.append(msg.id)
+        marker_position.append(msg)
 
+    if len(marker_list) >= 3:
+        all_markers_recieved = True
 
 if __name__ == '__main__':
+
+
+    """
+    DO NOT CHANGE THIS OFFSET
+    """
+    z_offset = 0.099
+
+
+    """
+    Moveit client
+    """
+
+
+    global marker_position
+    global marker_list
     rospy.init_node('trajectory_controller')
     listener = tf.TransformListener()
     final_pos = np.array([0.524, 0.08, 0.102])
@@ -29,9 +65,11 @@ if __name__ == '__main__':
     init_pos = final_pos
     init_rot = final_rot
     topic_name = "/arm_1/arm_controller/cartesian_velocity_command"
+    marker_topic = "/visualization_marker"
     vel_publisher = rospy.Publisher(topic_name, TwistStamped, queue_size=10)
+    marker_sub = rospy.Subscriber(marker_topic, Marker, marker_callback)
 
-
+    
 
     while True:
         try:
@@ -40,16 +78,66 @@ if __name__ == '__main__':
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
 
-    print "fafa", init_pos
+    print "node initialized"
+    
+
+
+    # capture points
+    while all_markers_recieved is not True:
+        pass
+    
+    print "All points captured"
+    ret_points = []
+    for p in marker_position:
+        point_stamped = PointStamped()
+        point_stamped.header = p.header
+        sec = int(time.time())
+        point_stamped.header.stamp.secs = sec
+        point_stamped.header.stamp.nsecs = 0
+        point_stamped.point.x = p.pose.position.x 
+        point_stamped.point.y = p.pose.position.y
+        point_stamped.point.z = p.pose.position.z
+
+        while True:
+            try:
+                new_point = listener.transformPoint('/base_link', point_stamped)
+                ret_points.append([new_point.point.x, new_point.point.y, z_offset])
+                
+                break
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                print "looping"
+                continue
+
+    print(marker_list)
+    print(ret_points)
+
+    final_pos1 = ret_points
+    
+    a = raw_input("set arm to linetracing configuration and Input something to keep going on")
+
+    while True:
+        try:
+            (init_pos,rot) = listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
+            break
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+
+
+
+
     init_pos = np.array(init_pos)
     init_rot = np.array(init_rot)
+
+    final_pos = np.array(final_pos1[0])
+    del final_pos1[0]
 
     path_x = np.linspace(init_pos[0], final_pos[0], 30)
     path_y = np.linspace(init_pos[1], final_pos[1], 30)
     path_z = np.linspace(init_pos[2], final_pos[2], 30)
 
-    final_pos1 = ([0.450, 0.08, 0.102],[0.45, -0.02, 0.102], [0.524, -0.02, 0.102])
+    #final_pos1 = ([0.450, 0.08, 0.102],[0.45, -0.02, 0.102], [0.524, -0.02, 0.102])
     f_old = final_pos
+
 
     
     for f in final_pos1:
@@ -62,6 +150,8 @@ if __name__ == '__main__':
         path_z = np.hstack((path_z,_z))
         f_old = f
 
+
+    
 
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
