@@ -165,8 +165,6 @@ class DMPs(object):
         if y0 is not None:
             self.y0 = y0
 
-        print("y0 is", self.y0)
-
         self.reset_state()
 
         if timesteps is None:

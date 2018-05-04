@@ -13,7 +13,7 @@ import math
 import actionlib
 import copy
 import mcr_manipulation_utils_ros.kinematics as kinematics
-from learning_DMP import ros_dmp
+from learn_motion_primitive import ros_dmp
 from trajectory_msgs.msg import JointTrajectoryPoint
 
 

@@ -4,7 +4,6 @@ import numpy as np
 import tf
 import yaml
 
-import mcr_manipulation_utils_ros.kinematics as kinematics
 
 import geometry_msgs
 from geometry_msgs.msg import TwistStamped

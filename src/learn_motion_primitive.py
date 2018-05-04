@@ -10,9 +10,9 @@ class ros_dmp:
     def __init__(self):
 
         # Path to store weight and load learning data
-        abs_path = os.path.abspath()
-        trajectory_path = abs_path + "../data/"
-        self.weight_path = abs_path + "../data/weights/"
+        #abs_path = os.path.abspath()
+        trajectory_path = "../data/"
+        self.weight_path = "../data/weights/"
 
         # Loading trajectory to learn
         with open(trajectory_path + 'trajectory_joint.yaml') as f:
@@ -50,11 +50,6 @@ class ros_dmp:
         with open(file, "w") as f:
             yaml.dump(data, f)
     
-    def roll(self):
-        
-        y_track, dy_track, ddy_track = self.dmp.rollout(goal=self.o_goal, y0=self.o_y0, tau=0.26)
-        return y_track, dy_track, ddy_track
-
 
 '''
 Test code
@@ -63,4 +58,4 @@ if __name__ == "__main__":
     
     dmp = ros_dmp()
     dmp.learn_dmp()
-    dmp.roll()
+    
