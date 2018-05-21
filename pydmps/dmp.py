@@ -156,6 +156,7 @@ class DMPs(object):
         self.reset_state()
         return self.w
 
+
     def rollout(self, timesteps=None, goal=None, y0=None, **kwargs):
         """Generate a system trial, no feedback is incorporated."""
 
@@ -177,7 +178,6 @@ class DMPs(object):
         y_track = np.zeros((timesteps, self.n_dmps))
         dy_track = np.zeros((timesteps, self.n_dmps))
         ddy_track = np.zeros((timesteps, self.n_dmps))
-
         for t in range(timesteps):
 
             # run and record timestep
@@ -212,7 +212,6 @@ class DMPs(object):
             # generate the forcing term
             f = (self.gen_front_term(x, d) *
                  (np.dot(psi, self.w[d])) / np.sum(psi))
-
             # DMP acceleration
             self.ddy[d] = (self.ay[d] *
                            (self.by[d] * (self.goal[d] - self.y[d]) -

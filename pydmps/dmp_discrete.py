@@ -143,7 +143,7 @@ if __name__ == "__main__":
     # a strange path to target
     path2 = np.zeros(path1.shape)
     path2[int(len(path2) / 2.):] = .5
-
+    
     for ii, bfs in enumerate(n_bfs):
         dmp = DMPs_discrete(n_dmps=2, n_bfs=bfs)
 
