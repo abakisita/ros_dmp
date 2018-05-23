@@ -16,6 +16,19 @@ class roll_dmp():
         self.pos, self.vel, self.acc = self.dmp.rollout(goal=goal, y0=initial_pos, tau=tau)
         return self.pos, self.vel, self.acc
 
+    def set_initial_pos(self, initial_pos):
+
+        self.dmp.set_y0(initial_pos)
+    
+    def update_goal(self, goal):
+
+        self.dmp.update_goal(goal)
+
+    def step(self, tau, external_force):
+
+        return self.dmp.step(tau=tau, external_force=external_force)
+
+
     def load_weights(self, file_name):
 
         with open(file_name) as f:

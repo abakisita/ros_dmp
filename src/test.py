@@ -4,7 +4,7 @@ import rospy
 import roll_dmp
 import std_msgs
 import geometry_msgs 
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped, Pose
 from nav_msgs.msg import Path
 import tf
 import actionlib
@@ -13,6 +13,7 @@ import moveit_msgs
 import moveit_commander
 import mcr_manipulation_utils_ros.kinematics as kinematics
 import yaml
+import time
 
 class dmp_executor():
 
@@ -32,12 +33,14 @@ class dmp_executor():
         self.feedforward_gain = 0.6
         self.feedback_gain = 0.6
 
+        self.update_goal_subscriber("/dmp_executor/update_goal", Pose, self.update_goal_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
         self.event_in = None
         self.goal = None
         self.initial_pos = None
         self.dmp_name = dmp_name
         self.tau = tau
+        self.roll = roll_dmp.roll_dmp(self.dmp_name)
 
 
         # wait for MoveIt! to come up
@@ -85,9 +88,10 @@ class dmp_executor():
 
         self.event_in = msg.data
 
-    def set_goal_cb(self, msg):
+    def update_goal_cb(self, msg):
 
-        self.goal = msg.data
+        self.goal = np.array([msg.data.position.x, msg.data.position.y, msg.data.position.z, 0.0, 0.0, 0.0])
+        self.roll.update_goal(self.goal)
 
     def set_initial_pos_cb(self, msg):
 
@@ -95,11 +99,11 @@ class dmp_executor():
             
     def generate_trajectory(self, goal, initial_pos):
 
-        goal = np.array([goal[0], goal[1], goal[2], 0.0, 0.0, 0.0])
-        initial_pos = np.array([initial_pos[0], initial_pos[1], initial_pos[2], 0.0, 0.0, 0.0])
-        self.roll = roll_dmp.roll_dmp(self.dmp_name)
-        self.pos, self.vel, self.acc = self.roll.roll(goal,initial_pos, self.tau)
-
+        self.goal = np.array([goal[0], goal[1], goal[2], 0.0, 0.0, 0.0])
+        self.initial_pos = np.array([initial_pos[0], initial_pos[1], initial_pos[2], 0.0, 0.0, 0.0])
+        self.pos, self.vel, self.acc = self.roll.roll(self.goal,self.initial_pos, self.tau)
+        self.roll.reset_state()
+    
     def publish_path(self):
 
         path = Path()
@@ -112,80 +116,59 @@ class dmp_executor():
             path.poses.append(pose_stamped)
         self.path_pub.publish(path)
 
+    def generate_feedback(self, current_pos, expected_pos, feedback_gain):
+
+        return (expected_pos - current_pos) * self.tau * feedback_gain
+
+
+
 
     def trajectory_controller(self):
         
         count = 0
-        previous_index = 0
-        path = self.pos[:, 0:3].T
-        path_x = path[0,:]
-        path_y = path[1,:]
-        path_z = path[2,:]
+        
+        pos = np.zeros((6)) 
+        vel = pos 
+        acc = vel
+        planned_trajectory = []
+        dt = 0.01
         while True:
             try:
                 (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
                 break
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
-        current_pos = np.array([trans[0], trans[1], trans[2]])
         
-        distance = np.linalg.norm((np.array(path[:,path.shape[1] - 1]) - current_pos))
+        current_pos = np.array([trans[0], trans[1], trans[2]])
+        distance = np.linalg.norm((self.goal - current_pos))
         followed_trajectory = []
-        print "final pos is ", path[:,path.shape[1] - 1]
 
-        old_pos_index = 0
+        previous_time_instace = time.time()
+        pos, vel, acc = self.roll.step(self.tau)
         while distance > self.goal_tolerance :
+
             try:
                 (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
+            
+            pos, vel, acc = self.roll.step(self.tau)
+
             message = TwistStamped()
             current_pos = np.array([trans[0], trans[1], trans[2]])
-            distance = np.linalg.norm((np.array(path[:,path.shape[1] - 1]) - current_pos))
-            dist = []
-            for i in range(path.shape[1]):
-                dist.append(np.linalg.norm((path[:,i] - current_pos)))
-            index =  np.argmin(dist)
+            distance = np.linalg.norm((self.goal - current_pos))
             
-            if old_pos_index != index:
+            
+            #rolling dmp step by step
+            if 0.01 < (previous_time_instace - time.time()):
+                external_force = self.generate_feedback(current_pos, pos, 0.4)
+                previous_time_instace = time.time()
+                pos, vel, acc = self.roll.step(external_force=external_force)
                 followed_trajectory.append(current_pos)
-                old_pos_index = index
-            
-
-
-            if index < previous_index:
-                index = previous_index
-            else : 
-                previous_index = index
-
-                
-
-            # Delete this block later
-            if (index > path.shape[1] - 1):
-                break
-
-            # Check if path repeated points in it, this will prevent trajectory execution as velocity between these two points will
-            # be zero (difference is zero)
-
-            '''
-            if index < path.shape[1] - 1 and path_x[index + 1] == path_x[index] and \
-                 path_y[index + 1] == path_y[index] and path_z[index + 1] == path_z[index]:
-                index += 1
-            '''
-
-
-            if index == path.shape[1] - 1:
-                ind = index
-            else:
-                ind = index + 1
-            '''
-            vel_x = velocities[0, index] + 0.2 * (path_x[ind] - current_pos[0])
-            vel_y = velocities[1, index] + 0.2 * (path_y[ind] - current_pos[1])
-            '''
-            
-            vel_x = self.feedforward_gain * (path_x[ind] - path_x[index]) + self.feedback_gain * (path_x[ind] - current_pos[0])
-            vel_y = self.feedforward_gain * (path_y[ind] - path_y[index]) + self.feedback_gain * (path_y[ind] - current_pos[1])
-            vel_z = self.feedforward_gain * (path_z[ind] - path_z[index]) + self.feedback_gain * (path_z[ind] - current_pos[2])
+                planned_trajectory.append(pos)
+            vel_x = vel[0]
+            vel_y = vel[1]
+            vel_z = vel[2]
 
             # vel_z should be zero
             message.header.seq = count
@@ -206,23 +189,20 @@ class dmp_executor():
         
         
         self.vel_publisher.publish(message)
-        return np.array(followed_trajectory), self.pos
+        return np.array(followed_trajectory), np.array(planned_trajectory)
 
     def execute(self, goal, initial_pos):
 
         self.generate_trajectory(goal, initial_pos)
         self.publish_path()
+
+        # use moveit to move to the initial position  
         start_pose = geometry_msgs.msg.PoseStamped()   
         start_pose.header.frame_id = "base_link"
         start_pose.pose.position.x = self.pos[0, 0]
         start_pose.pose.position.y = self.pos[0, 1]
         start_pose.pose.position.z = self.pos[0, 2]
         start_pose.pose.orientation.w = 1.0
-        """
-        start_pose.pose.position.x = 0.505173655361
-        start_pose.pose.position.y = -0.00939414527221
-        start_pose.pose.position.z = 0.224255038835
-        """
         start_pose.pose.orientation.x = 0.987783314898
         start_pose.pose.orientation.y = 0.155722342076
         start_pose.pose.orientation.z = 0.0057864431987
@@ -230,7 +210,11 @@ class dmp_executor():
         
         joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
         self.move_arm(joint_space_pose)
+
+        #wait for  user to give green signal
+
         i = raw_input("enter to execute motion")
+
 
         return self.trajectory_controller()
 
