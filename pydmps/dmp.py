@@ -156,6 +156,14 @@ class DMPs(object):
         self.reset_state()
         return self.w
 
+    def update_goal(self, goal):
+
+        self.goal = goal
+
+
+    def set_y0(self, y0):
+
+        self.y0 = y0
 
     def rollout(self, timesteps=None, goal=None, y0=None, **kwargs):
         """Generate a system trial, no feedback is incorporated."""
