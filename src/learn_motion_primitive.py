@@ -2,7 +2,7 @@
 import numpy as np
 import yaml
 import seaborn
-import os.path
+from os.path import join
 import pydmps
 
 
@@ -19,11 +19,11 @@ class ros_dmp:
         rospy.sleep(2)
         # Path to store weight and load learning data
         #abs_path = os.path.abspath()
-        trajectory_path = "../data/recorded_trajectories/"
+        trajectory_path = "../data/recorded_trajectories/23_05"
         self.weight_path = "../data/weights/"
 
         # Loading trajectory to learn
-        with open(trajectory_path + trajectory_file) as f:
+        with open(join(trajectory_path, trajectory_file)) as f:
             loadeddict = yaml.load(f)
 
         linear_trajectory = loadeddict.get('linear_trajectory')
@@ -41,7 +41,7 @@ class ros_dmp:
         self.positions -= self.positions[:,0][:,None]
 
         # Initiating DMP
-        self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=6, n_bfs=500, ay=np.ones(6)*10.0)
+        self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=6, n_bfs=50, ay=np.ones(6)*10.0)
         
 
 
@@ -56,7 +56,7 @@ class ros_dmp:
         data = {'x': np.asarray(weights[0,:]).tolist(), 'y': np.asarray(weights[1,:]).tolist(),
             'z': np.asarray(weights[2,:]).tolist(), 'roll': np.asarray(weights[3,:]).tolist(), 
             'pitch': np.asarray(weights[4,:]).tolist(), 'yaw': np.asarray(weights[5,:]).tolist()}
-        file = self.weight_path + file_name
+        file = join(self.weight_path, file_name)
         with open(file, "w") as f:
             yaml.dump(data, f)
 
@@ -77,8 +77,8 @@ Test code
 if __name__ == "__main__":
     
 
-    rospy.init_node("debug_node")
-    trajectory_file = "s04.yaml"
+    rospy.init_node("learn_motion_primitive")
+    trajectory_file = raw_input('Enter the trajectory file name: ')
     dmp = ros_dmp(trajectory_file=trajectory_file)
     weights_file = "weights_" + trajectory_file
     dmp.learn_dmp(file_name=weights_file)

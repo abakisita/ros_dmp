@@ -13,6 +13,7 @@ import moveit_msgs
 import moveit_commander
 import mcr_manipulation_utils_ros.kinematics as kinematics
 import yaml
+from os.path import join
 
 class dmp_executor():
 
@@ -71,7 +72,8 @@ class dmp_executor():
         """
         self.kinematics = kinematics.Kinematics("arm_1")
 
-        i = raw_input("enter to start")
+        # i = raw_input("enter to start")
+        rospy.loginfo('Going to start')
 
     def move_arm(self, target_pose):
 
@@ -230,18 +232,49 @@ class dmp_executor():
         
         joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
         self.move_arm(joint_space_pose)
-        i = raw_input("enter to execute motion")
+        # i = raw_input("enter to execute motion")
+        rospy.sleep(1.0)
+        rospy.loginfo('Executing motion')
 
         return self.trajectory_controller()
 
 if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
-    dmp_name = "../data/weights/weights_s04.yaml"
-    tau = 30
+    #dmp_name = raw_input('Enter the path of a trajectory weight file: ')# "../data/weights/weights_s04.yaml"
+    dmp_name = "../data/weights/weights_step_4_xz_plane.yaml"
+    experiment_data_path = "../data/experiments/23_05_step_function"
+    #experiment_data_path = raw_input('Enter the path of a directory where the experimental trajectories should be saved: ')
+    number_of_trials = int(raw_input('Enter the number of desired trials: '))
+    tau = 50
     
-    
+    '''
+    # inverse parabola
+    initial_pos = [0.6239002655985795, 0.14898291966686508, 0.03856489515421835]
+    goals = np.array([[0.4778817991671843, -0.12152428195625502, 0.04268073411707274],
+                    [0.5278817991671843, -0.12152428195625502, 0.04268073411707274],
+                    [0.4778817991671843, -0.07152428195625502, 0.04268073411707274],
+                    [0.4778817991671843, -0.12152428195625502, 0.07268073411707274],
+                    [0.5078817991671843, -0.14152428195625502, 0.05268073411707274]])
+    '''
+    """
+     # inverse parabola
+    initial_pos = [0.5229895370550418, -0.05849142739483036, 0.04235724362216553]
+    # goals = np.array([[0.5377165842826458, 0.16117097470639746, 0.04435152496637762],
+    #                   [0.5077165842826458, 0.16117097470639746, 0.04435152496637762],
+    #                   [0.5377165842826458, 0.13117097470639746, 0.04435152496637762],
+    #                   [0.5077165842826458, 0.18117097470639746, 0.04435152496637762],
+    #                   [0.5677165842826458, 0.14117097470639746, 0.04435152496637762]])
+    goals = np.array([[0.5077165842826458, 0.18117097470639746, 0.04435152496637762],
+                      [0.5677165842826458, 0.14117097470639746, 0.04435152496637762]])
 
+    """
+
+    initial_pos = [0.40035065642615446, 0.0, 0.04981048864687017]
+    goals = np.array([[0.5500212945684006, 0.0, 0.14814434495844467],
+                    [0.5000212945684006, 0.0, 0.17814434495844467],
+                    [0.5000212945684006, 0.0, 0.16814434495844467],
+                    [0.5000212945684006, 0.09982072917296857, 0.09814434495844467]])
     # s01
     #goal = [0.6565163014988611, 0.09613193867279159, -0.029017892027807135]
     #initial_pos = [0.595455037327542, 0.157326582524496, -0.06882172522527247]
@@ -253,12 +286,15 @@ if __name__ == "__main__":
     '''
     
     # s06
+    '''
     goals = np.array([[0.50514965309, 0.1029934215751,  0.1],
                     [0.480514965309, 0.1229934215751,  0.12],
                     [0.430514965309, 0.1529934215751,  0.16],
                     [0.510514965309, 0.2529934215751,  0.09],
                     [0.450514965309, 0.2329934215751,  0.07]])
     initial_pos = [0.454890328161, -0.234996709813, 0.06]
+    '''
+
     '''
     goals = np.array([[0.50, 0.15,  0.15],
                     [0.480514965309, 0.1229934215751,  0.058],
@@ -267,22 +303,22 @@ if __name__ == "__main__":
                     [0.460514965309, 0.2329934215751,  0.063]])
     initial_pos = [0.50, -0.15, 0.05]
     '''
-    goal_count = 0
+    goal_count = 1
     for goal in goals:
-        
         goal_count += 1
-        obj = dmp_executor(dmp_name, tau)
-        followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos)
-        data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
-        file = "goal_" + str(goal_count) + ".yaml"
-        with open(file, "w") as f:
-            yaml.dump(data, f)
+        trial_count = 0
+        for i in range(number_of_trials):
+            trial_count += 1
+            rospy.loginfo('Goal #%d, trial #%d' % (goal_count, trial_count))
+            obj = dmp_executor(dmp_name, tau)
+            followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos)
+            data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
+            file_name = join(experiment_data_path, "goal_" + str(goal_count)+ "_trial_"+ str(trial_count) + ".yaml")
+            with open(file_name, "w") as f:
+                yaml.dump(data, f)
 
-        data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
-        file = "plan_" + str(goal_count) + ".yaml"
-        with open(file, "w") as f:
-            yaml.dump(data, f)
-            
-
-
-        
+            data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
+            file_name = join(experiment_data_path, "plan_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
+            with open(file_name, "w") as f:
+                yaml.dump(data, f)
+        k = raw_input('press enter to continue')
