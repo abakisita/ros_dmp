@@ -28,10 +28,10 @@ class dmp_executor():
         self.tf_listener = tf.TransformListener()
         self.cartesian_velocity_command_pub = "/arm_1/arm_controller/cartesian_velocity_command"
         self.number_of_sampling_points = 30
-        self.goal_tolerance = 0.005
+        self.goal_tolerance = 0.002
         self.vel_publisher = rospy.Publisher(self.cartesian_velocity_command_pub, TwistStamped, queue_size=1)
-        self.feedforward_gain = 0.6
-        self.feedback_gain = 0.6
+        self.feedforward_gain = 60
+        self.feedback_gain = 10
 
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
         self.event_in = None
@@ -242,11 +242,11 @@ if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
     #dmp_name = raw_input('Enter the path of a trajectory weight file: ')# "../data/weights/weights_s04.yaml"
-    dmp_name = "../data/weights/weights_step_4_xz_plane.yaml"
-    experiment_data_path = "../data/experiments/23_05_step_function"
+    dmp_name = "../data/weights/weights_line.yaml"
+    experiment_data_path = "../data/experiments/26_05_line"
     #experiment_data_path = raw_input('Enter the path of a directory where the experimental trajectories should be saved: ')
     number_of_trials = int(raw_input('Enter the number of desired trials: '))
-    tau = 50
+    tau = 1
     
     '''
     # inverse parabola
@@ -270,6 +270,8 @@ if __name__ == "__main__":
 
     """
 
+    # square
+    '''
     initial_pos = [0.40035065642615446, 0.0, 0.04981048864687017]
     goals = np.array([[0.5500212945684006, 0.0, 0.14814434495844467],
                     [0.5000212945684006, 0.0, 0.17814434495844467],
@@ -278,22 +280,46 @@ if __name__ == "__main__":
     # s01
     #goal = [0.6565163014988611, 0.09613193867279159, -0.029017892027807135]
     #initial_pos = [0.595455037327542, 0.157326582524496, -0.06882172522527247]
-    
+    '''
     # s03
     '''
     goal = [0.6787391173619448, -0.1779881027574822, 0.02783503274142035]
     initial_pos = [0.6571846669990477, 0.16402033525929882, -0.026525658799735174]
     '''
-    
+    """ 
     # s06
-    '''
+    
     goals = np.array([[0.50514965309, 0.1029934215751,  0.1],
                     [0.480514965309, 0.1229934215751,  0.12],
                     [0.430514965309, 0.1529934215751,  0.16],
                     [0.510514965309, 0.2529934215751,  0.09],
                     [0.450514965309, 0.2329934215751,  0.07]])
     initial_pos = [0.454890328161, -0.234996709813, 0.06]
-    '''
+    """
+    # line
+    
+    goals = np.array([[0.46, 0.04, 0.1],
+                    [0.45, 0.10, 0.1],
+                    [0.44, 0.06, 0.1],
+                    [0.47, 0.02, 0.1],
+                    [0.435, 0.0, 0.1]])
+    initial_pos = [0.42, -0.19, 0.1]
+    
+ 
+    # s06
+    """
+    goals = np.array([[0.4716486275306709, 0.019262871925355593, 0.074801434683877235]])
+    initial_pos = [0.4512339629582322, 0.22913135658686382, 0.0610403383353328]
+    """
+    """
+    goals = np.array([[0.4616486275306709, 0.019262871925355593, 0.084801434683877235],
+                    [0.4916486275306709, 0.019262871925355593, 0.084801434683877235],
+                    [0.4616486275306709, -0.001262871925355593, 0.084801434683877235],
+                    [0.4616486275306709, 0.019262871925355593, 0.119801434683877235],
+                    [0.4816486275306709, 0.019262871925355593, 0.074801434683877235]])
+    initial_pos = [0.4512339629582322, 0.22913135658686382, 0.0610403383353328]
+    """
+    #[0.6712339629582322, 0.027913135658686382, -0.0110403383353328]
 
     '''
     goals = np.array([[0.50, 0.15,  0.15],
@@ -303,7 +329,7 @@ if __name__ == "__main__":
                     [0.460514965309, 0.2329934215751,  0.063]])
     initial_pos = [0.50, -0.15, 0.05]
     '''
-    goal_count = 1
+    goal_count = 0
     for goal in goals:
         goal_count += 1
         trial_count = 0
