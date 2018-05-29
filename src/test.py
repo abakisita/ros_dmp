@@ -298,11 +298,7 @@ if __name__ == "__main__":
     """
     # line
     
-    goals = np.array([[0.46, 0.04, 0.1],
-                    [0.45, 0.10, 0.1],
-                    [0.44, 0.06, 0.1],
-                    [0.47, 0.02, 0.1],
-                    [0.435, 0.0, 0.1]])
+    goals = np.array([[0.435, 0.0, 0.1]])
     initial_pos = [0.42, -0.19, 0.1]
     
  
@@ -329,7 +325,7 @@ if __name__ == "__main__":
                     [0.460514965309, 0.2329934215751,  0.063]])
     initial_pos = [0.50, -0.15, 0.05]
     '''
-    goal_count = 0
+    goal_count = 4
     for goal in goals:
         goal_count += 1
         trial_count = 0
