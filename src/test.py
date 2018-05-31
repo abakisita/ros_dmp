@@ -58,20 +58,6 @@ class dmp_executor():
         self.joint_names = self.commander.get_joint_names(self.group_name)
         self.link_names = self.commander.get_link_names(self.group_name)
 
-        """ 
-        # service clients
-        rospy.loginfo("Waiting for 'compute_ik' service")
-        rospy.wait_for_service('/compute_ik')
-        self.ik_client = rospy.ServiceProxy('/compute_ik',
-                                            moveit_msgs.srv.GetPositionIK)
-        rospy.loginfo("Found service 'compute_ik'")
-
-        rospy.loginfo("Waiting for 'compute_fk' service")
-        rospy.wait_for_service('/compute_fk')
-        self.fk_client = rospy.ServiceProxy('/compute_fk',
-                                            moveit_msgs.srv.GetPositionFK)
-        rospy.loginfo("Found service 'compute_fk'")
-        """
         self.kinematics = kinematics.Kinematics("arm_1")
 
         i = raw_input("enter to start")
