@@ -166,30 +166,16 @@ class dmp_executor():
             if (index > path.shape[1] - 1):
                 break
 
-            # Check if path repeated points in it, this will prevent trajectory execution as velocity between these two points will
-            # be zero (difference is zero)
-
-            '''
-            if index < path.shape[1] - 1 and path_x[index + 1] == path_x[index] and \
-                 path_y[index + 1] == path_y[index] and path_z[index + 1] == path_z[index]:
-                index += 1
-            '''
-
 
             if index == path.shape[1] - 1:
                 ind = index
             else:
                 ind = index + 1
-            '''
-            vel_x = velocities[0, index] + 0.2 * (path_x[ind] - current_pos[0])
-            vel_y = velocities[1, index] + 0.2 * (path_y[ind] - current_pos[1])
-            '''
             
             vel_x = self.feedforward_gain * (path_x[ind] - path_x[index]) + self.feedback_gain * (path_x[ind] - current_pos[0])
             vel_y = self.feedforward_gain * (path_y[ind] - path_y[index]) + self.feedback_gain * (path_y[ind] - current_pos[1])
             vel_z = self.feedforward_gain * (path_z[ind] - path_z[index]) + self.feedback_gain * (path_z[ind] - current_pos[2])
 
-            # vel_z should be zero
             message.header.seq = count
             message.header.frame_id = "/base_link"
             message.twist.linear.x = vel_x
@@ -298,9 +284,10 @@ if __name__ == "__main__":
     """
     # line
     
+    '''
     goals = np.array([[0.435, 0.0, 0.1]])
     initial_pos = [0.42, -0.19, 0.1]
-    
+    '''
  
     # s06
     """
