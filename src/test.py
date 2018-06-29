@@ -123,7 +123,7 @@ class dmp_executor():
         path_x = path[0,:]
         path_y = path[1,:]
         path_z = path[2,:]
-        while True:
+        while not rospy.is_shutdown():
             try:
                 (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
                 break
@@ -136,7 +136,7 @@ class dmp_executor():
         print "final pos is ", path[:,path.shape[1] - 1]
 
         old_pos_index = 0
-        while distance > self.goal_tolerance :
+        while distance > self.goal_tolerance and not rospy.is_shutdown() :
             try:
                 (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
