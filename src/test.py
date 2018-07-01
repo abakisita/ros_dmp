@@ -4,7 +4,7 @@ import rospy
 import roll_dmp
 import std_msgs
 import geometry_msgs 
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped, Twist
 from nav_msgs.msg import Path
 import tf
 import actionlib
@@ -19,27 +19,24 @@ class dmp_executor():
 
     def __init__(self, dmp_name, tau):
         
-        '''
-        rospy.Subscriber("/dmp_executor/event_in", std_msgs.msg.String, self.event_in_cb)
-        rospy.Subscriber("/dmp_executor/goal", geometry_msgs.msg.Pose, self.set_goal_cb)
-        rospy.Subscriber("/dmp_executor/initial_pos", geometry_msgs.msg.Pose, self.set_initial_pos_cb)
-        rospy.Subscriber("/dmp_executor/dmp_name", geometry_msgs.msg.Pose, self.set_initial_pos_cb)
-        '''
         self.tf_listener = tf.TransformListener()
         self.cartesian_velocity_command_pub = "/arm_1/arm_controller/cartesian_velocity_command"
         self.number_of_sampling_points = 30
-        self.goal_tolerance = 0.002
-        self.vel_publisher = rospy.Publisher(self.cartesian_velocity_command_pub, TwistStamped, queue_size=1)
+        self.goal_tolerance = 0.03
+        self.vel_publisher_arm = rospy.Publisher(self.cartesian_velocity_command_pub, TwistStamped, queue_size=1)
+        self.vel_publisher_base = rospy.Publisher('/cmd_vel_prio_low', Twist, queue_size=1)
         self.feedforward_gain = 60
         self.feedback_gain = 10
+        self.sigma_threshold = 0.085
 
+        rospy.Subscriber('/arm_1/arm_controller/sigma_values', std_msgs.msg.Float32MultiArray, self.sigma_values_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
         self.event_in = None
         self.goal = None
         self.initial_pos = None
         self.dmp_name = dmp_name
         self.tau = tau
-
+        
 
         # wait for MoveIt! to come up
         move_group = "move_group"
@@ -56,24 +53,12 @@ class dmp_executor():
         self.joint_names = self.commander.get_joint_names(self.group_name)
         self.link_names = self.commander.get_link_names(self.group_name)
 
-        """ 
-        # service clients
-        rospy.loginfo("Waiting for 'compute_ik' service")
-        rospy.wait_for_service('/compute_ik')
-        self.ik_client = rospy.ServiceProxy('/compute_ik',
-                                            moveit_msgs.srv.GetPositionIK)
-        rospy.loginfo("Found service 'compute_ik'")
-
-        rospy.loginfo("Waiting for 'compute_fk' service")
-        rospy.wait_for_service('/compute_fk')
-        self.fk_client = rospy.ServiceProxy('/compute_fk',
-                                            moveit_msgs.srv.GetPositionFK)
-        rospy.loginfo("Found service 'compute_fk'")
-        """
         self.kinematics = kinematics.Kinematics("arm_1")
-
-        # i = raw_input("enter to start")
+        self.min_sigma_value = None
         rospy.loginfo('Going to start')
+
+    def sigma_values_cb(self, msg):
+        self.min_sigma_value = min(msg.data)
 
     def move_arm(self, target_pose):
 
@@ -94,7 +79,8 @@ class dmp_executor():
     def set_initial_pos_cb(self, msg):
 
         self.initial_pos = msg.data
-            
+
+
     def generate_trajectory(self, goal, initial_pos):
 
         goal = np.array([goal[0], goal[1], goal[2], 0.0, 0.0, 0.0])
@@ -102,10 +88,32 @@ class dmp_executor():
         self.roll = roll_dmp.roll_dmp(self.dmp_name)
         self.pos, self.vel, self.acc = self.roll.roll(goal,initial_pos, self.tau)
 
+    def tranform_pose(self, pose):
+
+        #transform goals to odom frame
+        pose_stamped_ = geometry_msgs.msg.PoseStamped()   
+        pose_stamped_.header.frame_id = "base_link"
+        pose_stamped_.pose.position.x = pose[0]
+        pose_stamped_.pose.position.y = pose[1]
+        pose_stamped_.pose.position.z = pose[2]
+        pose_stamped_.pose.orientation.x = 0.987783314898
+        pose_stamped_.pose.orientation.y = 0.155722342076
+        pose_stamped_.pose.orientation.z = 0.0057864431987
+        pose_stamped_.pose.orientation.w = 0.0010918158567
+
+        while not rospy.is_shutdown():
+            try:
+                pose_ = self.tf_listener.transformPose('odom', pose_stamped_)
+                break
+            except:
+                continue
+        return np.array([pose_.pose.position.x, pose_.pose.position.y, pose_.pose.position.z])
+
+
     def publish_path(self):
 
         path = Path()
-        path.header.frame_id = "/base_link"
+        path.header.frame_id = "/odom"
         for itr in range(self.pos.shape[0]):
             pose_stamped = PoseStamped()
             pose_stamped.pose.position.x = self.pos[itr,0]
@@ -125,7 +133,7 @@ class dmp_executor():
         path_z = path[2,:]
         while not rospy.is_shutdown():
             try:
-                (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
+                (trans,rot) = self.tf_listener.lookupTransform('/odom', '/arm_link_5', rospy.Time(0))
                 break
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
@@ -138,10 +146,9 @@ class dmp_executor():
         old_pos_index = 0
         while distance > self.goal_tolerance and not rospy.is_shutdown() :
             try:
-                (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
+                (trans,rot) = self.tf_listener.lookupTransform('/odom', '/arm_link_5', rospy.Time(0))
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
-            message = TwistStamped()
             current_pos = np.array([trans[0], trans[1], trans[2]])
             distance = np.linalg.norm((np.array(path[:,path.shape[1] - 1]) - current_pos))
             dist = []
@@ -153,19 +160,14 @@ class dmp_executor():
                 followed_trajectory.append(current_pos)
                 old_pos_index = index
             
-
-
             if index < previous_index:
                 index = previous_index
             else : 
                 previous_index = index
 
-                
-
             # Delete this block later
             if (index > path.shape[1] - 1):
                 break
-
 
             if index == path.shape[1] - 1:
                 ind = index
@@ -176,45 +178,98 @@ class dmp_executor():
             vel_y = self.feedforward_gain * (path_y[ind] - path_y[index]) + self.feedback_gain * (path_y[ind] - current_pos[1])
             vel_z = self.feedforward_gain * (path_z[ind] - path_z[index]) + self.feedback_gain * (path_z[ind] - current_pos[2])
 
-            message.header.seq = count
-            message.header.frame_id = "/base_link"
-            message.twist.linear.x = vel_x
-            message.twist.linear.y = vel_y
-            message.twist.linear.z = vel_z
-            self.vel_publisher.publish(message)
-            count += 1
+            vel_x_arm = vel_x
+            vel_y_arm = vel_y
+            vel_z_arm = vel_z
+
+            vel_x_base = 0.0
+            vel_y_base = 0.0
+            vel_z_base = 0.0
+            if self.min_sigma_value != None:
+                if self.min_sigma_value < self.sigma_threshold:
+                    
+                    ratio = (self.sigma_threshold - self.min_sigma_value)/self.sigma_threshold 
+                    vel_x_arm = vel_x * (1 - ratio)
+                    vel_y_arm = vel_y * (1 - ratio)
+
+                    vel_x_base = vel_x * (ratio)
+                    vel_y_base = vel_y * (ratio)
+                    
+
+            message_arm = TwistStamped()
+            message_arm.header.seq = count
+            message_arm.header.frame_id = "/odom"
+            message_arm.twist.linear.x = vel_x_arm
+            message_arm.twist.linear.y = vel_y_arm
+            message_arm.twist.linear.z = vel_z_arm
+            self.vel_publisher_arm.publish(message_arm)
+
+
+
+            vector_ = Vector3Stamped()
+            vector_.header.seq = count
+            vector_.header.frame_id = "/odom"
+            vector_.vector.x = vel_x_base
+            vector_.vector.y = vel_y_base
+            vector_.vector.z = vel_z_base
             
+            vector_ = self.tf_listener.transformVector3('base_link', vector_)
+
+            message_base = Twist()
+            message_base.linear.x = vector_.vector.x
+            message_base.linear.y = vector_.vector.y
+            message_base.linear.z = vector_.vector.z           
+            self.vel_publisher_base.publish(message_base)
+            
+            count += 1
+
+        message_base = Twist()
+        message_base.linear.x = 0.0
+        message_base.linear.y = 0.0
+        message_base.linear.z = 0.0
         
-        message = TwistStamped()
-        message.header.seq = count
-        message.header.frame_id = "/base_link"
-        message.twist.linear.x = 0.0
-        message.twist.linear.y = 0.0
-        message.twist.linear.z = 0.0
+        message_arm = TwistStamped()
+        message_arm.header.seq = count
+        message_arm.header.frame_id = "/odom"
+        message_arm.twist.linear.x = 0
+        message_arm.twist.linear.y = 0
+        message_arm.twist.linear.z = 0
         
-        
-        self.vel_publisher.publish(message)
+        self.vel_publisher_arm.publish(message_arm)
+        self.vel_publisher_base.publish(message_base)
+
         return np.array(followed_trajectory), self.pos
 
     def execute(self, goal, initial_pos):
-
+        
+        
         self.generate_trajectory(goal, initial_pos)
+        pos = []
+        for i in range(self.pos.shape[0]):
+            pos.append(self.tranform_pose(self.pos[i,0:3]))
+        pos = np.array(pos)
+        self.pos = pos
         self.publish_path()
+
+        # transform pose to base link 
         start_pose = geometry_msgs.msg.PoseStamped()   
-        start_pose.header.frame_id = "base_link"
+        start_pose.header.frame_id = "odom"
         start_pose.pose.position.x = self.pos[0, 0]
         start_pose.pose.position.y = self.pos[0, 1]
         start_pose.pose.position.z = self.pos[0, 2]
-        start_pose.pose.orientation.w = 1.0
-        """
-        start_pose.pose.position.x = 0.505173655361
-        start_pose.pose.position.y = -0.00939414527221
-        start_pose.pose.position.z = 0.224255038835
-        """
+
+        while not rospy.is_shutdown():
+            try:
+                start_pose = self.tf_listener.transformPose('base_link', start_pose)
+                break
+            except:
+                continue
         start_pose.pose.orientation.x = 0.987783314898
         start_pose.pose.orientation.y = 0.155722342076
         start_pose.pose.orientation.z = 0.0057864431987
         start_pose.pose.orientation.w = 0.0010918158567
+
+
         
         joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
         self.move_arm(joint_space_pose)
@@ -229,7 +284,7 @@ if __name__ == "__main__":
     rospy.init_node("dmp_test")
     #dmp_name = raw_input('Enter the path of a trajectory weight file: ')# "../data/weights/weights_s04.yaml"
     dmp_name = "../data/weights/weights_line.yaml"
-    experiment_data_path = "../data/experiments/26_05_line"
+    experiment_data_path = "../data/experiments/30_06_line_wbc/"
     #experiment_data_path = raw_input('Enter the path of a directory where the experimental trajectories should be saved: ')
     number_of_trials = int(raw_input('Enter the number of desired trials: '))
     tau = 1
@@ -284,10 +339,14 @@ if __name__ == "__main__":
     """
     # line
     
-    '''
-    goals = np.array([[0.435, 0.0, 0.1]])
-    initial_pos = [0.42, -0.19, 0.1]
-    '''
+    
+    goals = np.array([[0.5, 0.50, 0.18],
+                    [0.5, 0.45, 0.18],
+                    [0.45, 0.40, 0.18],
+                    [0.5, 0.38, 0.18],
+                    [0.48, 0.35, 0.18],])
+    initial_pos = [0.42, -0.19, 0.18]
+    
  
     # s06
     """
@@ -312,7 +371,7 @@ if __name__ == "__main__":
                     [0.460514965309, 0.2329934215751,  0.063]])
     initial_pos = [0.50, -0.15, 0.05]
     '''
-    goal_count = 4
+    goal_count = 0
     for goal in goals:
         goal_count += 1
         trial_count = 0
@@ -322,12 +381,15 @@ if __name__ == "__main__":
             obj = dmp_executor(dmp_name, tau)
             followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos)
             data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
-            file_name = join(experiment_data_path, "goal_" + str(goal_count)+ "_trial_"+ str(trial_count) + ".yaml")
+            file_name = join(experiment_data_path + "goal_" + str(goal_count)+ "_trial_"+ str(trial_count) + ".yaml")
             with open(file_name, "w") as f:
                 yaml.dump(data, f)
 
             data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
-            file_name = join(experiment_data_path, "plan_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
+            file_name = join(experiment_data_path + "plan_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
             with open(file_name, "w") as f:
                 yaml.dump(data, f)
+            
+            k = raw_input('enter to start next run')
+
         k = raw_input('press enter to continue')
