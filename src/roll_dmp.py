@@ -24,10 +24,12 @@ class roll_dmp():
 
         self.dmp.update_goal(goal)
 
-    def step(self, tau, external_force):
+    def step(self, tau, external_force = np.zeros((6))):
 
         return self.dmp.step(tau=tau, external_force=external_force)
 
+    def reset_state(self):
+        self.dmp.reset_state()
 
     def load_weights(self, file_name):
 

@@ -33,7 +33,7 @@ class dmp_executor():
         self.feedforward_gain = 0.6
         self.feedback_gain = 0.6
 
-        self.update_goal_subscriber("/dmp_executor/update_goal", Pose, self.update_goal_cb)
+        rospy.Subscriber("/dmp_executor/update_goal", Pose, self.update_goal_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
         self.event_in = None
         self.goal = None
@@ -126,12 +126,12 @@ class dmp_executor():
                 continue
         
         current_pos = np.array([trans[0], trans[1], trans[2]])
-        distance = np.linalg.norm((self.goal - current_pos))
+        distance = np.linalg.norm((self.goal[:3] - current_pos))
         followed_trajectory = []
 
         previous_time_instace = time.time()
         pos, vel, acc = self.roll.step(self.tau)
-        while distance > self.goal_tolerance :
+        while distance > self.goal_tolerance and not rospy.is_shutdown() :
 
             try:
                 (trans,rot) = self.tf_listener.lookupTransform('/base_link', '/arm_link_5', rospy.Time(0))
@@ -140,9 +140,10 @@ class dmp_executor():
             
             pos, vel, acc = self.roll.step(self.tau)
 
+
             message = TwistStamped()
             current_pos = np.array([trans[0], trans[1], trans[2]])
-            distance = np.linalg.norm((self.goal - current_pos))
+            distance = np.linalg.norm((self.goal[0:3] - current_pos))
             
             
             #rolling dmp step by step
