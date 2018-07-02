@@ -28,10 +28,10 @@ class dmp_executor():
         self.tf_listener = tf.TransformListener()
         self.cartesian_velocity_command_pub = "/arm_1/arm_controller/cartesian_velocity_command"
         self.number_of_sampling_points = 30
-        self.goal_tolerance = 0.005
+        self.goal_tolerance = 0.01
         self.vel_publisher = rospy.Publisher(self.cartesian_velocity_command_pub, TwistStamped, queue_size=1)
-        self.feedforward_gain = 0.6
-        self.feedback_gain = 0.6
+        self.feedforward_gain = 1
+        self.feedback_gain = 0.9
 
         rospy.Subscriber("/dmp_executor/update_goal", Pose, self.update_goal_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
@@ -76,7 +76,8 @@ class dmp_executor():
 
     def update_goal_cb(self, msg):
 
-        self.goal = np.array([msg.data.position.x, msg.data.position.y, msg.data.position.z, 0.0, 0.0, 0.0])
+        self.goal = np.array([msg.position.x, msg.position.y, msg.position.z, 0.0, 0.0, 0.0])
+        print "Goal updated", self.goal
         self.roll.update_goal(self.goal)
 
     def set_initial_pos_cb(self, msg):
@@ -138,7 +139,6 @@ class dmp_executor():
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
             
-            pos, vel, acc = self.roll.step(self.tau)
 
 
             message = TwistStamped()
@@ -147,17 +147,18 @@ class dmp_executor():
             
             
             #rolling dmp step by step
-            if 0.01 < (previous_time_instace - time.time()):
-                external_force = self.generate_feedback(current_pos, pos, 0.4)
-                previous_time_instace = time.time()
-                pos, vel, acc = self.roll.step(external_force=external_force)
+            if np.linalg.norm((pos[0:3] - current_pos)) < 0.005:    
+                pos, vel, acc = self.roll.step(self.tau)
                 followed_trajectory.append(current_pos)
                 planned_trajectory.append(pos)
-            vel_x = vel[0]
-            vel_y = vel[1]
-            vel_z = vel[2]
 
-            # vel_z should be zero
+
+            vel_x = self.feedforward_gain * vel[0] + self.feedback_gain * (pos[0] - current_pos[0])
+            vel_y = self.feedforward_gain * vel[1] + self.feedback_gain * (pos[1] - current_pos[1])
+            vel_z = self.feedforward_gain * vel[2] + self.feedback_gain * (pos[2] - current_pos[2])
+
+
+            
             message.header.seq = count
             message.header.frame_id = "/base_link"
             message.twist.linear.x = vel_x
@@ -209,7 +210,7 @@ if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
     dmp_name = "../data/weights/weights_s04.yaml"
-    tau = 30
+    tau = 0.01
     
     
 
