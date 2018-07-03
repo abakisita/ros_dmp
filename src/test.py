@@ -27,7 +27,8 @@ class dmp_executor():
         self.vel_publisher_base = rospy.Publisher('/cmd_vel_prio_low', Twist, queue_size=1)
         self.feedforward_gain = 60
         self.feedback_gain = 10
-        self.sigma_threshold = 0.085
+        self.sigma_threshold_upper = 0.085
+        self.sigma_threshold_lower = 0.01
 
         rospy.Subscriber('/arm_1/arm_controller/sigma_values', std_msgs.msg.Float32MultiArray, self.sigma_values_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
@@ -186,16 +187,16 @@ class dmp_executor():
             vel_y_base = 0.0
             vel_z_base = 0.0
             if self.min_sigma_value != None:
-                if self.min_sigma_value < self.sigma_threshold:
+                if self.min_sigma_value < self.sigma_threshold_upper:
                     
-                    ratio = (self.sigma_threshold - self.min_sigma_value)/self.sigma_threshold 
-                    vel_x_arm = vel_x * (1 - ratio)
-                    vel_y_arm = vel_y * (1 - ratio)
+                    ratio = (self.min_sigma_value - self.sigma_threshold_lower)/(self.sigma_threshold_upper - self.sigma_threshold_lower)
 
-                    vel_x_base = vel_x * (ratio)
-                    vel_y_base = vel_y * (ratio)
+                    vel_x_arm = vel_x * (ratio)
+                    vel_y_arm = vel_y * (ratio)
+
+                    vel_x_base = vel_x * (1 - ratio)
+                    vel_y_base = vel_y * (1 - ratio)
                     
-
             message_arm = TwistStamped()
             message_arm.header.seq = count
             message_arm.header.frame_id = "/odom"
@@ -284,7 +285,7 @@ if __name__ == "__main__":
     rospy.init_node("dmp_test")
     #dmp_name = raw_input('Enter the path of a trajectory weight file: ')# "../data/weights/weights_s04.yaml"
     dmp_name = "../data/weights/weights_line.yaml"
-    experiment_data_path = "../data/experiments/30_06_line_wbc/"
+    experiment_data_path = ""
     #experiment_data_path = raw_input('Enter the path of a directory where the experimental trajectories should be saved: ')
     number_of_trials = int(raw_input('Enter the number of desired trials: '))
     tau = 1
@@ -347,7 +348,7 @@ if __name__ == "__main__":
                     [0.48, 0.35, 0.18],])
     initial_pos = [0.42, -0.19, 0.18]
     
- 
+
     # s06
     """
     goals = np.array([[0.4716486275306709, 0.019262871925355593, 0.074801434683877235]])
