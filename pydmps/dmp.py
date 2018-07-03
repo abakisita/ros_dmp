@@ -214,12 +214,14 @@ class DMPs(object):
 
         # generate basis function activation
         psi = self.gen_psi(x)
-
         for d in range(self.n_dmps):
 
             # generate the forcing term
-            f = (self.gen_front_term(x, d) *
-                 (np.dot(psi, self.w[d])) / np.sum(psi))
+            if np.sum(psi) > 1:
+                f = (self.gen_front_term(x, d) *
+                    (np.dot(psi, self.w[d])) / np.sum(psi))
+            else:
+                f = 0.0
             # DMP acceleration
             self.ddy[d] = (self.ay[d] *
                            (self.by[d] * (self.goal[d] - self.y[d]) -

@@ -62,6 +62,11 @@ class dmp_executor():
 
         i = raw_input("enter to start")
 
+
+        self.goal_change_point = np.array([0.5061580020369649, 0.09871831332859915, 0.10274008154802287])
+
+
+
     def move_arm(self, target_pose):
 
         print target_pose
@@ -110,8 +115,9 @@ class dmp_executor():
 
 
 
-    def trajectory_controller(self):
+    def trajectory_controller(self, changed_goal):
         
+        goal_is_changed = False
         count = 0
         
         pos = np.zeros((6)) 
@@ -130,7 +136,6 @@ class dmp_executor():
         distance = np.linalg.norm((self.goal[:3] - current_pos))
         followed_trajectory = []
 
-        previous_time_instace = time.time()
         pos, vel, acc = self.roll.step(self.tau)
         while distance > self.goal_tolerance and not rospy.is_shutdown() :
 
@@ -145,7 +150,14 @@ class dmp_executor():
             current_pos = np.array([trans[0], trans[1], trans[2]])
             distance = np.linalg.norm((self.goal[0:3] - current_pos))
             
-            
+            '''
+            Goal modification
+            '''
+            if np.linalg.norm((current_pos - self.goal_change_point)) < 0.01 and goal_is_changed == False:
+                goal_is_changed = True
+                self.goal = np.array([changed_goal[0], changed_goal[1], changed_goal[2], 0.0, 0.0, 0.0])
+                self.roll.update_goal(self.goal)
+
             #rolling dmp step by step
             if np.linalg.norm((pos[0:3] - current_pos)) < 0.005:    
                 pos, vel, acc = self.roll.step(self.tau)
@@ -167,6 +179,8 @@ class dmp_executor():
             self.vel_publisher.publish(message)
             count += 1
             
+            
+
         
         message = TwistStamped()
         message.header.seq = count
@@ -179,38 +193,59 @@ class dmp_executor():
         self.vel_publisher.publish(message)
         return np.array(followed_trajectory), np.array(planned_trajectory)
 
-    def execute(self, goal, initial_pos):
+    def execute(self, initial_pos):
 
-        self.generate_trajectory(goal, initial_pos)
-        self.publish_path()
+        original_goal = np.array([0.50514965309, 0.1029934215751,  0.1])
 
-        # use moveit to move to the initial position  
-        start_pose = geometry_msgs.msg.PoseStamped()   
-        start_pose.header.frame_id = "base_link"
-        start_pose.pose.position.x = self.pos[0, 0]
-        start_pose.pose.position.y = self.pos[0, 1]
-        start_pose.pose.position.z = self.pos[0, 2]
-        start_pose.pose.orientation.w = 1.0
-        start_pose.pose.orientation.x = 0.987783314898
-        start_pose.pose.orientation.y = 0.155722342076
-        start_pose.pose.orientation.z = 0.0057864431987
-        start_pose.pose.orientation.w = 0.0010918158567
-        
-        joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
-        self.move_arm(joint_space_pose)
+        goals = np.array([[0.480514965309, 0.1229934215751,  0.12],
+                    [0.430514965309, 0.1529934215751,  0.16],
+                    [0.510514965309, 0.2529934215751,  0.09],
+                    [0.450514965309, 0.2329934215751,  0.07]])
 
-        #wait for  user to give green signal
+        goal_count = 0
+        for goal in goals:
+            goal_count += 1            
+            for ijk in range(5):
+                self.generate_trajectory(original_goal, initial_pos)
+                self.publish_path()
 
-        i = raw_input("enter to execute motion")
+                # use moveit to move to the initial position  
+                start_pose = geometry_msgs.msg.PoseStamped()   
+                start_pose.header.frame_id = "base_link"
+                start_pose.pose.position.x = self.pos[0, 0]
+                start_pose.pose.position.y = self.pos[0, 1]
+                start_pose.pose.position.z = self.pos[0, 2]
+                start_pose.pose.orientation.w = 1.0
+                start_pose.pose.orientation.x = 0.987783314898
+                start_pose.pose.orientation.y = 0.155722342076
+                start_pose.pose.orientation.z = 0.0057864431987
+                start_pose.pose.orientation.w = 0.0010918158567
+                joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
+                self.move_arm(joint_space_pose)
 
+                #wait for  user to give green signal
 
-        return self.trajectory_controller()
+                i = raw_input("enter to execute motion")
+                followed_trajectory, planned_trajectory = self.trajectory_controller(goal)
+                data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
+                file = "../data/experiments/ogm/goal_" + str(goal_count) + "trial_" + str(ijk) + ".yaml"
+
+                with open(file, "w") as f:
+                    yaml.dump(data, f)
+
+                data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
+                file = "../data/experiments/ogm/plan_" + str(goal_count) + "trial_" + str(ijk) + ".yaml"
+
+                with open(file, "w") as f:
+                    yaml.dump(data, f)
+                
+
 
 if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
     dmp_name = "../data/weights/weights_s04.yaml"
-    tau = 0.01
+    tau = 1
     
     
 
@@ -231,6 +266,7 @@ if __name__ == "__main__":
                     [0.510514965309, 0.2529934215751,  0.09],
                     [0.450514965309, 0.2329934215751,  0.07]])
     initial_pos = [0.454890328161, -0.234996709813, 0.06]
+
     '''
     goals = np.array([[0.50, 0.15,  0.15],
                     [0.480514965309, 0.1229934215751,  0.058],
@@ -240,21 +276,8 @@ if __name__ == "__main__":
     initial_pos = [0.50, -0.15, 0.05]
     '''
     goal_count = 0
-    for goal in goals:
+    obj = dmp_executor(dmp_name, tau)
+    obj.execute(initial_pos)
         
-        goal_count += 1
-        obj = dmp_executor(dmp_name, tau)
-        followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos)
-        data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
-        file = "goal_" + str(goal_count) + ".yaml"
-        with open(file, "w") as f:
-            yaml.dump(data, f)
-
-        data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
-        file = "plan_" + str(goal_count) + ".yaml"
-        with open(file, "w") as f:
-            yaml.dump(data, f)
-            
-
 
         

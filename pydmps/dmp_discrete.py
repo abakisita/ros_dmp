@@ -69,6 +69,7 @@ class DMPs_discrete(DMPs):
         x float: the current value of the canonical system
         dmp_num int: the index of the current dmp
         """
+        print self.goal
         return x * (self.goal[dmp_num] - self.y0[dmp_num])
 
     def gen_goal(self, y_des):
