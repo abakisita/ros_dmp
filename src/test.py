@@ -28,10 +28,10 @@ class dmp_executor():
         self.tf_listener = tf.TransformListener()
         self.cartesian_velocity_command_pub = "/arm_1/arm_controller/cartesian_velocity_command"
         self.number_of_sampling_points = 30
-        self.goal_tolerance = 0.01
+        self.goal_tolerance = 0.02
         self.vel_publisher = rospy.Publisher(self.cartesian_velocity_command_pub, TwistStamped, queue_size=1)
-        self.feedforward_gain = 1
-        self.feedback_gain = 0.9
+        self.feedforward_gain = 0.8
+        self.feedback_gain = 6
 
         rospy.Subscriber("/dmp_executor/update_goal", Pose, self.update_goal_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
@@ -63,7 +63,7 @@ class dmp_executor():
         i = raw_input("enter to start")
 
 
-        self.goal_change_point = np.array([0.5061580020369649, 0.09871831332859915, 0.10274008154802287])
+        self.goal_change_point = np.array([0.4893742648357876, -0.19447904947512895, 0.11855376189875282])
 
 
 
@@ -162,7 +162,9 @@ class dmp_executor():
             if np.linalg.norm((pos[0:3] - current_pos)) < 0.005:    
                 pos, vel, acc = self.roll.step(self.tau)
                 followed_trajectory.append(current_pos)
-                planned_trajectory.append(pos)
+                pos_ = pos.copy()
+                pos_ = pos_[0:3]
+                planned_trajectory.append(pos_.copy())
 
 
             vel_x = self.feedforward_gain * vel[0] + self.feedback_gain * (pos[0] - current_pos[0])
@@ -179,9 +181,7 @@ class dmp_executor():
             self.vel_publisher.publish(message)
             count += 1
             
-            
 
-        
         message = TwistStamped()
         message.header.seq = count
         message.header.frame_id = "/base_link"
@@ -196,13 +196,19 @@ class dmp_executor():
     def execute(self, initial_pos):
 
         original_goal = np.array([0.50514965309, 0.1029934215751,  0.1])
-
-        goals = np.array([[0.480514965309, 0.1229934215751,  0.12],
+        '''
+        goals = np.array([[0.50514965309, 0.1029934215751,  0.1],   
+                    [0.480514965309, 0.1229934215751,  0.12],
                     [0.430514965309, 0.1529934215751,  0.16],
                     [0.510514965309, 0.2529934215751,  0.09],
-                    [0.450514965309, 0.2329934215751,  0.07]])
-
-        goal_count = 0
+                    [0.450514965309, 0.2029934215751,  0.09]])
+        '''
+        goals = np.array([#[0.50514965309, 0.1029934215751,  0.1],   
+            #[0.480514965309, 0.1229934215751,  0.12],
+            #[0.430514965309, 0.1529934215751,  0.16],
+            [0.450514965309, 0.2329934215751,  0.09],
+            [0.450514965309, 0.2029934215751,  0.09]])
+        goal_count = 3
         for goal in goals:
             goal_count += 1            
             for ijk in range(5):
@@ -223,9 +229,11 @@ class dmp_executor():
                 joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
                 self.move_arm(joint_space_pose)
 
+
+                rospy.sleep(2)
                 #wait for  user to give green signal
 
-                i = raw_input("enter to execute motion")
+   
                 followed_trajectory, planned_trajectory = self.trajectory_controller(goal)
                 data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
                 file = "../data/experiments/ogm/goal_" + str(goal_count) + "trial_" + str(ijk) + ".yaml"
@@ -238,14 +246,15 @@ class dmp_executor():
 
                 with open(file, "w") as f:
                     yaml.dump(data, f)
-                
+                rospy.sleep(1)
+                print "Done ........................."
 
 
 if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
     dmp_name = "../data/weights/weights_s04.yaml"
-    tau = 1
+    tau = 0.5
     
     
 
