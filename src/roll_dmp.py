@@ -6,10 +6,11 @@ import pydmps
 
 class roll_dmp():
 
-    def __init__(self, file_name, n_dmps=6, n_bfs=1500 ):
+    def __init__(self, file_name, n_dmps=6, n_bfs=1500):
 
         weight = self.load_weights(file_name)
-        self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=n_dmps, n_bfs=n_bfs, dt=0.001, ay=np.ones(n_dmps)*10.0, w=weight)
+        self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=n_dmps, n_bfs=n_bfs,
+                                                     dt=0.001, ay=np.ones(n_dmps)*10.0, w=weight)
 
     def roll(self, goal, initial_pos, tau):
 
@@ -43,9 +44,6 @@ class roll_dmp():
         weights = np.vstack((weights, yaw))
 
         return weights
-
-    
-
 
 """
 Test code

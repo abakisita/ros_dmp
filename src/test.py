@@ -1,9 +1,8 @@
 #!/usr/bin/python
 import numpy as np
 import rospy
-import roll_dmp
 import std_msgs
-import geometry_msgs 
+import geometry_msgs
 from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped, Twist
 from nav_msgs.msg import Path
 import tf
@@ -14,24 +13,31 @@ import moveit_commander
 import mcr_manipulation_utils_ros.kinematics as kinematics
 import yaml
 from os.path import join
+import roll_dmp
 
 class dmp_executor():
 
     def __init__(self, dmp_name, tau):
-        
+        """
+        Initialization
+        """
         self.tf_listener = tf.TransformListener()
         self.cartesian_velocity_command_pub = "/arm_1/arm_controller/cartesian_velocity_command"
         self.number_of_sampling_points = 30
         self.goal_tolerance = 0.03
-        self.vel_publisher_arm = rospy.Publisher(self.cartesian_velocity_command_pub, TwistStamped, queue_size=1)
-        self.vel_publisher_base = rospy.Publisher('/cmd_vel_prio_low', Twist, queue_size=1)
+        self.vel_publisher_arm = rospy.Publisher(self.cartesian_velocity_command_pub,
+                                                 TwistStamped, queue_size=1)
+        self.vel_publisher_base = rospy.Publisher('/cmd_vel_prio_low', 
+                                                Twist, queue_size=1)
         self.feedforward_gain = 60
         self.feedback_gain = 10
         self.sigma_threshold_upper = 0.085
         self.sigma_threshold_lower = 0.01
 
-        rospy.Subscriber('/arm_1/arm_controller/sigma_values', std_msgs.msg.Float32MultiArray, self.sigma_values_cb)
-        self.path_pub = rospy.Publisher("/dmp_executor/debug_path", Path, queue_size=1)
+        rospy.Subscriber('/mir_manipulation/mcr_arm_cartesian_control/sigma_values',
+                         std_msgs.msg.Float32MultiArray, self.sigma_values_cb)
+        self.path_pub = rospy.Publisher("/dmp_executor/debug_path",
+                                         Path, queue_size=1)
         self.event_in = None
         self.goal = None
         self.initial_pos = None
@@ -56,6 +62,7 @@ class dmp_executor():
 
         self.kinematics = kinematics.Kinematics("arm_1")
         self.min_sigma_value = None
+        self.deploy_wbc = True  
         rospy.loginfo('Going to start')
 
     def sigma_values_cb(self, msg):
@@ -186,8 +193,9 @@ class dmp_executor():
             vel_x_base = 0.0
             vel_y_base = 0.0
             vel_z_base = 0.0
-            if self.min_sigma_value != None:
-                if self.min_sigma_value < self.sigma_threshold_upper:
+            ratio = 1.0
+
+            if self.min_sigma_value != None and self.min_sigma_value < self.sigma_threshold_upper and self.deploy_wbc:
                     
                     ratio = (self.min_sigma_value - self.sigma_threshold_lower)/(self.sigma_threshold_upper - self.sigma_threshold_lower)
 
@@ -196,7 +204,24 @@ class dmp_executor():
 
                     vel_x_base = vel_x * (1 - ratio)
                     vel_y_base = vel_y * (1 - ratio)
+
+                    # Publish base velocity inside the if consition
+                    vector_ = Vector3Stamped()
+                    vector_.header.seq = count
+                    vector_.header.frame_id = "/odom"
+                    vector_.vector.x = vel_x_base
+                    vector_.vector.y = vel_y_base
+                    vector_.vector.z = vel_z_base
                     
+                    vector_ = self.tf_listener.transformVector3('base_link', vector_)
+
+                    message_base = Twist()
+                    message_base.linear.x = vector_.vector.x
+                    message_base.linear.y = vector_.vector.y
+                    message_base.linear.z = vector_.vector.z           
+                    self.vel_publisher_base.publish(message_base)
+                    
+            
             message_arm = TwistStamped()
             message_arm.header.seq = count
             message_arm.header.frame_id = "/odom"
@@ -204,31 +229,15 @@ class dmp_executor():
             message_arm.twist.linear.y = vel_y_arm
             message_arm.twist.linear.z = vel_z_arm
             self.vel_publisher_arm.publish(message_arm)
-
-
-
-            vector_ = Vector3Stamped()
-            vector_.header.seq = count
-            vector_.header.frame_id = "/odom"
-            vector_.vector.x = vel_x_base
-            vector_.vector.y = vel_y_base
-            vector_.vector.z = vel_z_base
-            
-            vector_ = self.tf_listener.transformVector3('base_link', vector_)
-
-            message_base = Twist()
-            message_base.linear.x = vector_.vector.x
-            message_base.linear.y = vector_.vector.y
-            message_base.linear.z = vector_.vector.z           
-            self.vel_publisher_base.publish(message_base)
-            
             count += 1
 
+        # stop arm and base motion after converging 
         message_base = Twist()
         message_base.linear.x = 0.0
         message_base.linear.y = 0.0
         message_base.linear.z = 0.0
-        
+
+               
         message_arm = TwistStamped()
         message_arm.header.seq = count
         message_arm.header.frame_id = "/odom"
@@ -237,7 +246,9 @@ class dmp_executor():
         message_arm.twist.linear.z = 0
         
         self.vel_publisher_arm.publish(message_arm)
-        self.vel_publisher_base.publish(message_base)
+        
+        if self.deploy_wbc :
+            self.vel_publisher_base.publish(message_base)
 
         return np.array(followed_trajectory), self.pos
 
