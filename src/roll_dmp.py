@@ -6,7 +6,7 @@ import pydmps
 
 class roll_dmp():
 
-    def __init__(self, file_name, n_dmps=6, n_bfs=1500):
+    def __init__(self, file_name, n_dmps=6, n_bfs=50):
 
         weight = self.load_weights(file_name)
         self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=n_dmps, n_bfs=n_bfs,

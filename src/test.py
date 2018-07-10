@@ -34,6 +34,10 @@ class dmp_executor():
         self.sigma_threshold_upper = 0.085
         self.sigma_threshold_lower = 0.01
 
+
+        rospy.Subscriber("/mcr_navigation/direct_base_controller/coordinator/event_out", std_msgs.msg.String, self.dbc_event_cb)
+        self.dbc_pose_pub = rospy.Publisher("/mcr_navigation/direct_base_controller/input_pose", PoseStamped, queue_size=1)
+        self.dbc_event_pub = rospy.Publisher("/mcr_navigation/direct_base_controller/coordinator/event_in", std_msgs.msg.String, queue_size=1)
         rospy.Subscriber('/mir_manipulation/mcr_arm_cartesian_control/sigma_values',
                          std_msgs.msg.Float32MultiArray, self.sigma_values_cb)
         self.path_pub = rospy.Publisher("/dmp_executor/debug_path",
@@ -63,6 +67,7 @@ class dmp_executor():
         self.kinematics = kinematics.Kinematics("arm_1")
         self.min_sigma_value = None
         self.deploy_wbc = True  
+        self.dbc_event = None
         rospy.loginfo('Going to start')
 
     def sigma_values_cb(self, msg):
@@ -88,12 +93,29 @@ class dmp_executor():
 
         self.initial_pos = msg.data
 
+    def dbc_event_cb(self, msg):
+
+        self.dbc_event = msg.data
+
+    def bring_back_start_pose(self):
+        
+        PoseStamped_ = PoseStamped()
+        PoseStamped_.header.frame_id = "odom"
+        self.dbc_pose_pub.publish(PoseStamped_)
+        
+        event_ = std_msgs.msg.String()
+        event_.data = 'e_start'
+        self.dbc_event_pub.publish(event_)
+        while True:
+            if self.dbc_event == 'e_success':
+                break
+
 
     def generate_trajectory(self, goal, initial_pos):
 
         goal = np.array([goal[0], goal[1], goal[2], 0.0, 0.0, 0.0])
         initial_pos = np.array([initial_pos[0], initial_pos[1], initial_pos[2], 0.0, 0.0, 0.0])
-        self.roll = roll_dmp.roll_dmp(self.dmp_name)
+        self.roll = roll_dmp.roll_dmp(self.dmp_name, n_bfs=150)
         self.pos, self.vel, self.acc = self.roll.roll(goal,initial_pos, self.tau)
 
     def tranform_pose(self, pose):
@@ -285,17 +307,21 @@ class dmp_executor():
         
         joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
         self.move_arm(joint_space_pose)
-        # i = raw_input("enter to execute motion")
+        #i = raw_input("enter to execute motion")
         rospy.sleep(1.0)
         rospy.loginfo('Executing motion')
 
-        return self.trajectory_controller()
+        followed_trajectory, planned_trajectory = self.trajectory_controller()
+        rospy.sleep(1.0)
+        self.bring_back_start_pose()
+        return followed_trajectory, planned_trajectory
 
 if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
     #dmp_name = raw_input('Enter the path of a trajectory weight file: ')# "../data/weights/weights_s04.yaml"
-    dmp_name = "../data/weights/weights_line.yaml"
+    dmp_name = "../data/weights/weights_square.yaml"
+    #experiment_data_path = "../data/experiments/07_07_square/"
     experiment_data_path = ""
     #experiment_data_path = raw_input('Enter the path of a directory where the experimental trajectories should be saved: ')
     number_of_trials = int(raw_input('Enter the number of desired trials: '))
@@ -351,14 +377,23 @@ if __name__ == "__main__":
     """
     # line
     
-    
-    goals = np.array([[0.5, 0.50, 0.18],
-                    [0.5, 0.45, 0.18],
-                    [0.45, 0.40, 0.18],
-                    [0.5, 0.38, 0.18],
-                    [0.48, 0.35, 0.18],])
-    initial_pos = [0.42, -0.19, 0.18]
-    
+
+    # parabola, 07.07    
+    # goals = np.array([[0.49, 0.34,  0.06],
+    #                   [0.44, 0.34,  0.06],
+    #                   [0.49, 0.44, 0.06],
+    #                   [0.54, 0.39, 0.06],
+    #                   [0.64, 0.49, 0.06]])
+    # initial_pos = [0.42, -0.19, 0.11]
+
+    # rectangle, 07.07
+    goals = np.array([#[0.40, 0.37, 0.11],
+                      #[0.42, 0.37,  0.11],
+                      #[0.40, 0.47, 0.11],
+                      #[0.45, 0.32, 0.11],
+                      [0.35, 0.52, 0.11]])
+    initial_pos = [0.45, -0.13, 0.11]
+
 
     # s06
     """
@@ -383,7 +418,7 @@ if __name__ == "__main__":
                     [0.460514965309, 0.2329934215751,  0.063]])
     initial_pos = [0.50, -0.15, 0.05]
     '''
-    goal_count = 0
+    goal_count = 4
     for goal in goals:
         goal_count += 1
         trial_count = 0
@@ -402,6 +437,4 @@ if __name__ == "__main__":
             with open(file_name, "w") as f:
                 yaml.dump(data, f)
             
-            k = raw_input('enter to start next run')
-
-        k = raw_input('press enter to continue')
+        

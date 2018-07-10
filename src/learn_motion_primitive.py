@@ -13,7 +13,7 @@ class ros_dmp:
         rospy.sleep(2)
         # Path to store weight and load learning data
         #abs_path = os.path.abspath()
-        trajectory_path = "../data/recorded_trajectories/old_trajectories"
+        trajectory_path = "../data/recorded_trajectories/07_07"
         self.weight_path = "../data/weights/"
 
         # Loading trajectory to learn
@@ -34,7 +34,7 @@ class ros_dmp:
         # Removing bias from the data. (Start position is zero now)
         self.positions -= self.positions[:, 0][:, None]
         # Initiating DMP
-        self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=6, n_bfs=1500, ay=np.ones(6)*10.0)
+        self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=6, n_bfs=150, ay=np.ones(6)*10.0)
         self.pos = None
         self.vel = None
         self.acc = None
