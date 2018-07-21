@@ -14,6 +14,7 @@ import mcr_manipulation_utils_ros.kinematics as kinematics
 import yaml
 from os.path import join
 import roll_dmp
+import move_base_msgs.msg
 
 class dmp_executor():
 
@@ -51,35 +52,45 @@ class dmp_executor():
 
         # wait for MoveIt! to come up
         move_group = "move_group"
-        self.group_name = "arm_1"
+        self.group_name = "whole_body"
 
         client = actionlib.SimpleActionClient(move_group, moveit_msgs.msg.MoveGroupAction)
         rospy.loginfo("Waiting for '{0}' server".format(move_group))
         client.wait_for_server()
         rospy.loginfo("Found server '{0}'".format(move_group))
 
-        self.group = moveit_commander.MoveGroupCommander(self.group_name)
-        self.commander = moveit_commander.RobotCommander()
-        self.state = moveit_commander.RobotState()
-        self.joint_names = self.commander.get_joint_names(self.group_name)
-        self.link_names = self.commander.get_link_names(self.group_name)
+        # moveit 
+        robot = moveit_commander.RobotCommander()
+        scene = moveit_commander.PlanningSceneInterface()
+        self.group = moveit_commander.MoveGroupCommander("whole_body") # take control of the hsrb arm
+        self.group.allow_replanning(True) # 5 attempts
+        robot_state=robot.get_current_state()
+        self.group.set_planning_time(10) #10 seconds for the planner
+        self.group.set_goal_tolerance(0.005)
 
-        self.kinematics = kinematics.Kinematics("arm_1")
         self.min_sigma_value = None
         self.deploy_wbc = True  
         self.dbc_event = None
+
+        # Move base server
+        self.move_base_client = actionlib.SimpleActionClient('move_base/move', move_base_msgs.msg.MoveBaseAction)
+        self.move_base_client.wait_for_server()
+        print "found move_base server"
+
         rospy.loginfo('Going to start')
 
     def sigma_values_cb(self, msg):
         self.min_sigma_value = min(msg.data)
 
+    def move_base(self):
+        move_base_goal = move_base_msgs.msg.MoveBaseGoal()
+        move_base_goal.target_pose.header.frame_id = 'map'
+        print self.move_base_client.send_goal(move_base_goal)
+
     def move_arm(self, target_pose):
 
-        print target_pose
-        self.group.set_joint_value_target(target_pose)
+        self.group.set_named_target('pregrasp')
         self.group.go()
-       
-        #self.group.execute(plan)
 
     def event_in_cb(self, msg):
 
@@ -163,7 +174,7 @@ class dmp_executor():
         path_z = path[2,:]
         while not rospy.is_shutdown():
             try:
-                (trans,rot) = self.tf_listener.lookupTransform('/odom', '/arm_link_5', rospy.Time(0))
+                (trans,rot) = self.tf_listener.lookupTransform('/odom', '/hand_palm_link', rospy.Time(0))
                 break
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
@@ -176,7 +187,7 @@ class dmp_executor():
         old_pos_index = 0
         while distance > self.goal_tolerance and not rospy.is_shutdown() :
             try:
-                (trans,rot) = self.tf_listener.lookupTransform('/odom', '/arm_link_5', rospy.Time(0))
+                (trans,rot) = self.tf_listener.lookupTransform('/odom', '/hand_palm_link', rospy.Time(0))
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
             current_pos = np.array([trans[0], trans[1], trans[2]])
@@ -298,15 +309,12 @@ class dmp_executor():
                 break
             except:
                 continue
-        start_pose.pose.orientation.x = 0.987783314898
-        start_pose.pose.orientation.y = 0.155722342076
-        start_pose.pose.orientation.z = 0.0057864431987
-        start_pose.pose.orientation.w = 0.0010918158567
-
-
+        start_pose.pose.orientation.x = 0.529
+        start_pose.pose.orientation.y = -0.475
+        start_pose.pose.orientation.z = 0.467
+        start_pose.pose.orientation.w = 0.525
         
-        joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
-        self.move_arm(joint_space_pose)
+        self.move_arm(start_pose)
         #i = raw_input("enter to execute motion")
         rospy.sleep(1.0)
         rospy.loginfo('Executing motion')
@@ -387,13 +395,12 @@ if __name__ == "__main__":
     # initial_pos = [0.42, -0.19, 0.11]
 
     # rectangle, 07.07
-    goals = np.array([#[0.40, 0.37, 0.11],
-                      #[0.42, 0.37,  0.11],
-                      #[0.40, 0.47, 0.11],
-                      #[0.45, 0.32, 0.11],
+    goals = np.array([[0.50, 0.4, 0.689],
+                      [0.32, 0.37,  0.11],
+                      [0.33, 0.47, 0.11],
+                      [0.31, 0.32, 0.11],
                       [0.35, 0.52, 0.11]])
-    initial_pos = [0.45, -0.13, 0.11]
-
+    initial_pos = [0.534, 0.078, 0.689]
 
     # s06
     """
@@ -418,7 +425,7 @@ if __name__ == "__main__":
                     [0.460514965309, 0.2329934215751,  0.063]])
     initial_pos = [0.50, -0.15, 0.05]
     '''
-    goal_count = 4
+    goal_count = 0
     for goal in goals:
         goal_count += 1
         trial_count = 0
