@@ -13,7 +13,7 @@ class ros_dmp:
         rospy.sleep(2)
         # Path to store weight and load learning data
         #abs_path = os.path.abspath()
-        trajectory_path = "../data/recorded_trajectories/07_07"
+        trajectory_path = "../data/recorded_trajectories/26_07"
         self.weight_path = "../data/weights/"
 
         # Loading trajectory to learn

@@ -3,33 +3,22 @@ import nav_msgs.msg
 import actionlib
 import move_base_msgs.msg
 import actionlib_msgs.msg
-from mcr_manipulation_utils_ros.kinematics import Kinematics
-import moveit_commander
+import move_base_msgs.msg
 
 if __name__ == "__main__":
-
-    group_name = "move_group"
-    rospy.init_node('move_base_client_test')
-    group = moveit_commander.MoveGroupCommander(group_name)
-    commander = moveit_commander.RobotCommander()
-    state = moveit_commander.RobotState()
-    joint_names = commander.get_joint_names(group_name)
-    link_names = commander.get_link_names(group_name)
-
-    kinematics = Kinematics("arm")
     
-    start_pose = geometry_msgs.msg.PoseStamped()   
-    start_pose.header.frame_id = "odom"
-    start_pose.pose.position.x = 0.371 
-    start_pose.pose.position.y = -0.062
-    start_pose.pose.position.z = 0.662
-    start_pose.pose.orientation.x = -0.502
-    start_pose.pose.orientation.y = 0.502
-    start_pose.pose.orientation.z = -0.498
-    start_pose.pose.orientation.w = -0.498
-
-
-    
-    joint_space_pose = self.kinematics.inverse_kinematics(start_pose)
-    group.set_joint_value_target(joint_space_pose)
-    group.go()
+    # Move base server
+    rospy.init_node("test_node")
+    move_base_client = actionlib.SimpleActionClient('move_base/move', move_base_msgs.msg.MoveBaseAction)
+    move_base_client.wait_for_server()
+    print "found move_base server"
+    move_base_goal = move_base_msgs.msg.MoveBaseGoal()
+    move_base_goal.target_pose.header.frame_id = 'map'
+    print move_base_goal
+    print move_base_client.send_goal(move_base_goal)
+    """
+    - Translation: [0.007, -0.010, 0.000]
+    - Rotation: in Quaternion [0.000, 0.000, 0.618, 0.786]
+            in RPY (radian) [0.000, -0.000, 1.333]
+            in RPY (degree) [0.000, -0.000, 76.348]
+    """
