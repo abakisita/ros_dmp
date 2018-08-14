@@ -32,13 +32,18 @@ class dmp_executor():
                                                  TwistStamped, queue_size=1)
         self.vel_publisher_base = rospy.Publisher('/hsrb/command_velocity', 
                                                 Twist, queue_size=1)
-        self.feedforward_gain = 30
-        self.feedback_gain = 1
-        self.sigma_threshold_upper = 0.12
-        self.sigma_threshold_lower = 0.07
+        self.feedforward_gain = 20
+        self.feedback_gain = 8
+        self.sigma_threshold_upper = 0.25
+        self.sigma_threshold_lower = 0.15
+        self.front_distance_threshold_upper = 0.15
+        self.front_distance_threshold_lower = 0.05
         self.base_feedback_gain = 2.0
+        self.min_front_distance = 1.0
+        self.laser_scan_min_ind = 331
+        self.laser_scan_max_ind = 632
 
-        #rospy.Subscriber("/hsrb/base_scan", sensor_msgs.msg.LaserScan, self.laser_scan_filter)
+        rospy.Subscriber("/hsrb/base_scan", sensor_msgs.msg.LaserScan, self.laser_scan_filter)
         rospy.Subscriber("/mcr_navigation/direct_base_controller/coordinator/event_out", std_msgs.msg.String, self.dbc_event_cb)
         self.dbc_pose_pub = rospy.Publisher("/mcr_navigation/direct_base_controller/input_pose", PoseStamped, queue_size=1)
         self.dbc_event_pub = rospy.Publisher("/mcr_navigation/direct_base_controller/coordinator/event_in", std_msgs.msg.String, queue_size=1)
@@ -60,19 +65,19 @@ class dmp_executor():
         move_group = "move_group"
         self.group_name = "arm"
 
-        client = actionlib.SimpleActionClient(move_group, moveit_msgs.msg.MoveGroupAction)
-        rospy.loginfo("Waiting for '{0}' server".format(move_group))
-        client.wait_for_server()
-        rospy.loginfo("Found server '{0}'".format(move_group))
+        #client = actionlib.SimpleActionClient(move_group, moveit_msgs.msg.MoveGroupAction)
+        #rospy.loginfo("Waiting for '{0}' server".format(move_group))
+        #client.wait_for_server()
+        #rospy.loginfo("Found server '{0}'".format(move_group))
 
         # moveit 
-        robot = moveit_commander.RobotCommander()
-        scene = moveit_commander.PlanningSceneInterface()
-        self.group = moveit_commander.MoveGroupCommander("arm") # take control of the hsrb arm
-        self.group.allow_replanning(True) # 5 attempts
-        robot_state=robot.get_current_state()
-        self.group.set_planning_time(10) #10 seconds for the planner
-        self.group.set_goal_tolerance(0.005)
+        # robot = moveit_commander.RobotCommander()
+        # scene = moveit_commander.PlanningSceneInterface()
+        # self.group = moveit_commander.MoveGroupCommander("arm") # take control of the hsrb arm
+        # self.group.allow_replanning(True) # 5 attempts
+        # robot_state=robot.get_current_state()
+        # self.group.set_planning_time(10) #10 seconds for the planner
+        # self.group.set_goal_tolerance(0.005)
 
         self.min_sigma_value = None
         self.deploy_wbc = True  
@@ -84,9 +89,7 @@ class dmp_executor():
         print "found move_base server"
 
         rospy.loginfo('Going to start')
-        self.min_front_distance = 1.0
-        self.laser_scan_min_ind = 331
-        self.laser_scan_max_ind = 632
+
 
     def laser_scan_filter(self, msg):
         ranges = msg.ranges[self.laser_scan_min_ind : self.laser_scan_max_ind]
@@ -255,7 +258,6 @@ class dmp_executor():
                 vel_y = vel_y * 0.05 / norm_
                 vel_z = vel_z * 0.05 / norm_
 
-
             vel_x_arm = vel_x
             vel_y_arm = vel_y
             vel_z_arm = vel_z
@@ -264,16 +266,32 @@ class dmp_executor():
             vel_y_base = 0.0
             vel_z_base = 0.0
             ratio = 1.0
-
+            ratio_arm = 1.0
+            ratio_base = 1.0
             if self.min_sigma_value != None and self.min_sigma_value < self.sigma_threshold_upper and self.deploy_wbc:
                 
-                ratio = (self.min_sigma_value - self.sigma_threshold_lower)/(self.sigma_threshold_upper - self.sigma_threshold_lower)
+                ratio_arm = (self.min_sigma_value - self.sigma_threshold_lower)/(self.sigma_threshold_upper - self.sigma_threshold_lower)
                 
+                if self.min_front_distance != None and self.min_front_distance < self.front_distance_threshold_upper:
 
-                vel_x_arm = vel_x * (ratio)
-                vel_y_arm = vel_y * (ratio)
-                vel_x_base = vel_x * (1 - ratio) 
-                vel_y_base = vel_y * (1 - ratio) 
+                    ratio_base = (self.min_front_distance - self.front_distance_threshold_lower)/(self.front_distance_threshold_upper - self.front_distance_threshold_lower)
+
+                ratio = ratio_arm + ratio_base
+
+                if ratio < 0.05:
+                    print "Motion Not Possible Due to both arm and base constraints, \
+                           arm is near singularity and base is about to collide"
+                    break
+
+                if vel_x > 0.0 and self.min_front_distance < self.front_distance_threshold_upper:
+                    vel_x_base = 0.0
+                    vel_x_arm = vel_x
+                else :
+                    vel_x_arm = vel_x * ratio_arm
+                    vel_x_base = vel_x * (1 - ratio_arm)
+
+                vel_y_arm = vel_y * ratio_arm
+                vel_y_base = vel_y * (1 - ratio_arm)
 
                 # Publish base velocity inside the if consition
                 vector_ = Vector3Stamped()
@@ -290,8 +308,7 @@ class dmp_executor():
                 message_base.linear.y = vector_.vector.y
                 message_base.linear.z = vector_.vector.z           
                 self.vel_publisher_base.publish(message_base)
-                
-            
+
             message_arm = TwistStamped()
             message_arm.header.seq = count
             message_arm.header.frame_id = "/odom"
@@ -332,7 +349,7 @@ class dmp_executor():
         trajectory_point.positions = [1.0]
         trajectory_point.time_from_start = rospy.Time(5.)
         traj.points = [trajectory_point]
-        self.gripper_traj_pub.publish(traj)
+        #self.gripper_traj_pub.publish(traj)
         rospy.sleep(3.)
         
         self.generate_trajectory(goal, initial_pos)
@@ -361,7 +378,7 @@ class dmp_executor():
         start_pose.pose.orientation.z = 0.467
         start_pose.pose.orientation.w = 0.525
         
-        self.move_arm('neutral')
+        #self.move_arm('neutral')
         #i = raw_input("enter to execute motion")
         rospy.sleep(1.0)
         rospy.loginfo('Executing motion')
@@ -370,16 +387,16 @@ class dmp_executor():
         rospy.sleep(1.0)
         print "Finished the motion"
 
-        traj = JointTrajectory()
-        traj.joint_names = ['hand_motor_joint']
-        trajectory_point = JointTrajectoryPoint()
-        trajectory_point.positions = [-0.5]
-        trajectory_point.time_from_start = rospy.Time(5.)
-        traj.points = [trajectory_point]
-        self.gripper_traj_pub.publish(traj)
-        rospy.sleep(3.)
+        # traj = JointTrajectory()
+        # traj.joint_names = ['hand_motor_joint']
+        # trajectory_point = JointTrajectoryPoint()
+        # trajectory_point.positions = [-0.5]
+        # trajectory_point.time_from_start = rospy.Time(5.)
+        # traj.points = [trajectory_point]
+        # #self.gripper_traj_pub.publish(traj)
+        # rospy.sleep(3.)
 
-        self.move_arm('go')
+        #self.move_arm('go')
 
         # disabled for minh's experiments
         # self.move_base()
@@ -399,8 +416,9 @@ if __name__ == "__main__":
 
     rospy.init_node("dmp_test")
     #dmp_name = raw_input('Enter the path of a trajectory weight file: ')# "../data/weights/weights_s04.yaml"
-    dmp_name = "../data/weights/weights_grasp_2.yaml"
-    experiment_data_path = "../data/experiments/26_07_grasp/"
+    dmp_1_name = "../data/weights/weights_low_reach.yaml"
+    dmp_2_name = "../data/weights/weights_low_to_high_parabola_2.yaml"
+    experiment_data_path = "../data/experiments/02_08_place_on_table/"
     #experiment_data_path = ""
     #experiment_data_path = raw_input('Enter the path of a directory where the experimental trajectories should be saved: ')
     #number_of_trials = int(raw_input('Enter the number of desired trials: '))
@@ -502,14 +520,80 @@ if __name__ == "__main__":
     initial_pos = [0.50, -0.15, 0.05]
     '''
 
-    goals = np.array([[0.50, 0.078, 0.79]])
-    initial_pos = [0.287, 0.078, 0.673]
+    goals_1 = np.array([[0.5, 0.078, 0.623]])
+    initial_pos_1 = [0.287, 0.078, 0.673]
+    initial_pos_2 = [0.5, 0.078, 0.623]
+    goals_2 = np.array([[0.40, 0.50, 0.82]])
 
     goal_count = 0
     while not rospy.is_shutdown():
-        # if goal_count < len(goals):
-        #     goal = goals[goal_count]
-        #     print goal
+        
+        if goal_count < len(goals_1):
+            
+            trial_count = raw_input("Enter_trial_number")
+            trial_count = int(trial_count)
+            goal = goals_1[goal_count]
+            print goal
+            rospy.loginfo('Goal #%d, trial #%d' % (goal_count, trial_count))
+            obj = dmp_executor(dmp_1_name, tau)
+            #obj.move_arm('neutral')
+            followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos_1)
+            data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
+            file_name = join(experiment_data_path + "goal_1_" + str(goal_count)+ "_trial_"+ str(trial_count) + ".yaml")
+            with open(file_name, "w") as f:
+                yaml.dump(data, f)
+
+            data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
+            file_name = join(experiment_data_path + "plan_1_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
+            with open(file_name, "w") as f:
+                yaml.dump(data, f)
+
+            traj = JointTrajectory()
+            traj.joint_names = ['hand_motor_joint']
+            trajectory_point = JointTrajectoryPoint()
+            trajectory_point.positions = [-0.5]
+            trajectory_point.time_from_start = rospy.Time(5.)
+            traj.points = [trajectory_point]
+            obj.gripper_traj_pub.publish(traj)
+            rospy.sleep(3.)
+
+            while not rospy.is_shutdown():
+                try:
+                    (trans,rot) = obj.tf_listener.lookupTransform('/base_link', '/hand_palm_link', rospy.Time(0))
+                    break
+                except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                    continue
+            initial_pos_2 = [trans[0], trans[1], trans[2]]
+
+
+            goal = goals_2[goal_count]
+            print goal
+            rospy.loginfo('Goal #%d, trial #%d' % (goal_count, trial_count))
+            obj = dmp_executor(dmp_2_name, tau)
+            followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos_2)
+            data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
+            file_name = join(experiment_data_path + "goal_2_" + str(goal_count)+ "_trial_"+ str(trial_count) + ".yaml")
+            with open(file_name, "w") as f:
+                yaml.dump(data, f)
+
+            data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
+            file_name = join(experiment_data_path + "plan_2_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
+            with open(file_name, "w") as f:
+                yaml.dump(data, f)
+
+            traj = JointTrajectory()
+            traj.joint_names = ['hand_motor_joint']
+            trajectory_point = JointTrajectoryPoint()
+            trajectory_point.positions = [1.0]
+            trajectory_point.time_from_start = rospy.Time(5.)
+            traj.points = [trajectory_point]
+            obj.gripper_traj_pub.publish(traj)
+            rospy.sleep(3.)
+
+            goal_count += 1
+
+        # if new_goal == True:
+        #     new_goal = False
         #     goal_count += 1
         #     trial_count = 0
         #     rospy.loginfo('Goal #%d, trial #%d' % (goal_count, trial_count))
@@ -524,21 +608,5 @@ if __name__ == "__main__":
         #     file_name = join(experiment_data_path + "plan_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
         #     with open(file_name, "w") as f:
         #         yaml.dump(data, f)
-        if new_goal == True:
-            new_goal = False
-            goal_count += 1
-            trial_count = 0
-            rospy.loginfo('Goal #%d, trial #%d' % (goal_count, trial_count))
-            obj = dmp_executor(dmp_name, tau)
-            followed_trajectory, planned_trajectory = obj.execute(goal, initial_pos)
-            data = {'executed_trajectory': np.asarray(followed_trajectory).tolist()}
-            file_name = join(experiment_data_path + "goal_" + str(goal_count)+ "_trial_"+ str(trial_count) + ".yaml")
-            with open(file_name, "w") as f:
-                yaml.dump(data, f)
-
-            data = {'planned_trajectory': np.asarray(planned_trajectory).tolist()}
-            file_name = join(experiment_data_path + "plan_" + str(goal_count) +"_trial_"+ str(trial_count) + ".yaml")
-            with open(file_name, "w") as f:
-                yaml.dump(data, f)
         
         

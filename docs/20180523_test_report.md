@@ -56,7 +56,7 @@ __Test objectives:__
 
 __Test parameters:__
 * Number of basis functions: 50
-* tau = 50
+* tau = 10
 * Number of trials: 10
 
 __Observations:__

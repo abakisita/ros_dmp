@@ -1,5 +1,4 @@
-Test report 07.07.2018
-======================
+# Test report 07.07.2018
 
 |                                      |                                       |
 |--------------------------------------|---------------------------------------|
@@ -14,7 +13,7 @@ Test report 07.07.2018
 |                                      | lab floor (ground level)              |
 
 
-__Test procedure:__
+## Test procedure
 
 ___On the robot:___
 1. Switch on the youbot
@@ -33,7 +32,12 @@ ___On an external machine:___
 9. To repeat a demonstrated trajectory, change the initial and goal position in `ros_dmp/src/test.py` and then run `test.py`. If multiple goal poses are specified, the robot will go to each one of those; however, each pose will first be repeated a given number of times. After finishing each trial, press ENTER to go to the next trial. The data for each trial (both the planned and executed trajectories) are saved to a specified location.
 
 
-__Test assumptions:__
+## Experimental setup
+
+![Experimental setup](images/whole_body.png)
+
+## Test assumptions
+
 * There are no obstacles in the environment
 * The camera used for recording the trajectory is calibrated
 * The camera frame rate is low (~5fps), so the trajectory has to be demonstrated slowly
@@ -43,9 +47,10 @@ __Test assumptions:__
 
 
 
-Test 1:
---------
-__Test objectives:__
+## Test 1:
+
+### Test objectives
+
 * Acquiring a demonstrated trajectory (inverse parabolic curve) which is partially outside of the robot's dexterous workspace
 * Repeating the demonstrated trajectory with five different goal locations. The different goal locations are specified as follows:
 ** goal 1: x same as demonstrated final position, y same, z + 15cm
@@ -54,19 +59,22 @@ __Test objectives:__
 ** goal 4: x + 5cm, y + 5cm, z + 15cm
 ** goal 5: x + 15cm, y + 15cm, z + 15cm
 
-__Test parameters:__
+### Test parameters
+
 * Number of basis functions: 50
 * tau = 1
 * Number of trials: 10
 * A height offset of 15cm is introduced in the z coordinate as the motion is controlled with respect to arm_link_5 (at the mount point of the gripper), but the demonstration was with respect to the tip of the gripper
 
-__Observations:__
+### Observations
+
 * Since the demonstrated trajectory has initial and final z values that are practically equal to each other, varying z creates infeasible resulting trajectories; this primitive is thus limited to scenarios in which the initial and final z position are the same (e.g. moving an object from one side of a table to another)
  
 
-Test 2:
---------
-__Test objectives:__
+## Test 2
+
+### Test objectives
+
 * Acquiring a demonstrated trajectory (rectangular shape) which is partially outside of the robot's dexterous workspace
 * Repeating the demonstrated trajectory with five different goal locations. The different goal locations are specified as follows:
 ** goal 1: x same as demonstrated, y same, z + 15cm
@@ -75,19 +83,20 @@ __Test objectives:__
 ** goal 4: x + 5cm, y - 5cm, z + 15cm
 ** goal 5: x - 5cm, y + 15cm, z + 15cm
 
-__Test parameters:__
+### Test parameters
+
 * Number of basis functions: 150
 * tau = 1
 * Number of trials: 10
 * An offset of 5cm was introduced to the x position because the initial position of the demonstrated trajectory was very close to the body of the robot
 * A height offset of 15cm is introduced in the z coordinate as the motion is controlled with respect to arm_link_5 (at the mount point of the gripper), but the demonstration was with respect to the tip of the gripper
 
-__Observations:__
+### Observations
+
 * Since the demonstrated trajectory has initial and final z values that are practically equal to each other, varying z creates infeasible resulting trajectories; this primitive is thus limited to scenarios in which the initial and final z position are the same (e.g. moving an object from one side of a table to another)
 
 
+## General observations
 
-General observations
-------------------
 * Increasing tau too much (e.g. 100) causes overshoots at sharp turns.
 
