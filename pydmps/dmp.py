@@ -88,7 +88,7 @@ class DMPs(object):
     def gen_weights(self, f_target):
         raise NotImplementedError()
 
-    def imitate_path(self, y_des, plot=False):
+    def imitate_path(self, y_des):
         """Takes in a desired trajectory and generates the set of
         system parameters that best realize this path.
 
@@ -131,27 +131,9 @@ class DMPs(object):
             f_target[:, d] = (ddy_des[d] - self.ay[d] *
                               (self.by[d] * (self.goal[d] - y_des[d]) -
                               dy_des[d]))
-
+        
         # efficiently generate weights to realize f_target
         self.gen_weights(f_target)
-
-        if plot is True:
-            # plot the basis function activations
-            import matplotlib.pyplot as plt
-            plt.figure()
-            plt.subplot(211)
-            psi_track = self.gen_psi(self.cs.rollout())
-            plt.plot(psi_track)
-            plt.title('basis functions')
-
-            # plot the desired forcing function vs approx
-            plt.subplot(212)
-            plt.plot(f_target[:,0])
-            plt.plot(np.sum(psi_track * self.w[0], axis=1) * self.dt)
-            plt.legend(['f_target', 'w*psi'])
-            plt.title('DMP forcing function')
-            plt.tight_layout()
-            plt.show()
 
         self.reset_state()
         return self.w
