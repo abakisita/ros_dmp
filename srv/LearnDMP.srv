@@ -1,5 +1,6 @@
 Header header
 std_msgs/String output_weight_file_name
+std_msgs/String dmp_name
 geometry_msgs/Pose[] poses
 int64 n_bfs
 int64 n_dmps
