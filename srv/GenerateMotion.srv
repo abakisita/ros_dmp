@@ -1,7 +1,7 @@
-std_msgs/String dmp_name
-geometry_msgs/Pose initial_pose
-geometry_msgs/Pose goal_pose
+string dmp_name
+geometry_msgs/PoseStamped initial_pose
+geometry_msgs/PoseStamped goal_pose
 float64 tau
 float64 dt
 ---
-std_msgs/String result
+string result
