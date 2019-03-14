@@ -2,15 +2,5 @@
 <launch>
  <!-- Publish base_link transfrom to support visualization of the trajectories -->
  <node pkg="tf" type="static_transform_publisher" name="base_link_transform" args="0.0 0.0 0.0 0.0 0.0 0.0 odom base_link 50"/>
- <node pkg="ros_dmp" type="learn_dmp_service_node"
-          name="learn_dmp_service_node" output="screen">
-    <!-- the node cycle rate (in hz) -->
-    <param name="loop_rate" type="double" value="30.0"/>
-    <param name="weights_file_path" type="string" value="dmp/weights/"/>
- </node>
- <node pkg="ros_dmp" type="generate_motion_service_node.py"
-          name="generate_motion_service_node" output="screen">
-    <!-- the node cycle rate (in hz) -->
-    <param name="loop_rate" type="double" value="30.0"/>
- </node>
+ <include file="$(find ros_dmp)/launch/dmp.launch"/>
 </launch>
