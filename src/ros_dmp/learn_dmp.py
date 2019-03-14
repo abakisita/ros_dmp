@@ -18,6 +18,7 @@ class LearnDmp:
         
         rospy.init_node("learn_dynamic_motion_primitive_service")
         service_ = rospy.Service('learn_dynamic_motion_primitive_service', LearnDMP, self.learn_dmp_handler)
+        rospy.loginfo("Started learn DMP service")
     
         # Publishers
         self.imitated_path_pub = rospy.Publisher("~imitated_path", Path, queue_size=1)
