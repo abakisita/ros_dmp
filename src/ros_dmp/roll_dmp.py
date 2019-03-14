@@ -1,16 +1,17 @@
 import numpy as np
 import yaml
-import seaborn
 import os.path
 import pydmps
 
 class RollDmp():
 
-    def __init__(self, file_name, n_dmps=6, n_bfs=50):
+    def __init__(self, file_name, dt):
 
-        weight = self.load_weights(file_name)
+        weights = self.load_weights(file_name)
+        n_dmps = weights.shape[0]
+        n_bfs = weights.shape[1]
         self.dmp = pydmps.dmp_discrete.DMPs_discrete(n_dmps=n_dmps, n_bfs=n_bfs,
-                                                     dt=0.001, ay=None, w=weight)
+                                                     dt=dt, ay=None, w=weights)
 
     def roll(self, goal, initial_pos, tau):
 
@@ -28,40 +29,12 @@ class RollDmp():
         pitch = loadeddict.get('pitch')
         yaw = loadeddict.get('yaw')
 
-        x = np.array(x)
-        y = np.array(y)
-        z = np.array(z)
-        roll = np.array(roll)
-        pitch = np.array(pitch)
-        yaw = np.array(yaw)
-
-
-        weights = x
-        weights = np.vstack((weights, y))
-        weights = np.vstack((weights, z))
-        weights = np.vstack((weights, roll))
-        weights = np.vstack((weights, pitch))
-        weights = np.vstack((weights, yaw))
+        weights = np.array(x)
+        weights = np.vstack((weights, np.array(y)))
+        weights = np.vstack((weights, np.array(z)))
+        weights = np.vstack((weights, np.array(roll)))
+        weights = np.vstack((weights, np.array(pitch)))
+        weights = np.vstack((weights, np.array(yaw)))
 
         return weights
 
-"""
-Test code
-"""
-
-if __name__ == "__main__":
-    path = '/home/abhishek/r_and_d/ros_i/src/ros_dmp/data/weights/weights_s01.yaml'
-    trajectory_path = '/home/abhishek/r_and_d/ros_i/src/ros_dmp/data/recorded_trajecories/'
-    with open(trajectory_path + 'trajectory_joint.yaml') as f:
-        loadeddict = yaml.load(f)
-
-    linear_trajectory = loadeddict.get('linear_trajectory')
-    rotational_trajectory = loadeddict.get('rotational_trajectory')
-    
-    linear_init = linear_trajectory[0]
-    rotational_init = rotational_trajectory[0]
-    linear_goal = linear_trajectory[0]
-    rotational_ = rotational_trajectory[0]
-
-    roll = roll_dmp(path)
-    roll.roll(o_goal, o_y0)
