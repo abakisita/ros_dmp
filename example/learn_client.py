@@ -21,8 +21,8 @@ if __name__ == "__main__":
     o_w = np.linspace(0, 1)
 
     req.header.frame_id = 'base_link'
-    req.output_weight_file_name.data = 'example.yaml'
-    req.dmp_name.data = 'square_wave'
+    req.output_weight_file_name = 'example.yaml'
+    req.dmp_name = 'square_wave'
     req.header.stamp = rospy.Time.now()
     req.n_bfs = 500
     req.n_dmps = 6

@@ -36,17 +36,17 @@ class LearnDmp:
 
         rospy.loginfo("Recieved request to learn a motion primitive")
         trajectory = np.zeros((6, len(req.poses)))
-        rospy.loginfo("Learning motion primitive " + req.dmp_name.data)
+        rospy.loginfo("Learning motion primitive " + req.dmp_name)
         for i in range(len(req.poses)):
             rpy = tf.transformations.euler_from_quaternion([req.poses[i].orientation.x, req.poses[i].orientation.y,
                                                                     req.poses[i].orientation.z, req.poses[i].orientation.w])
             trajectory[:,i] = [req.poses[i].position.x, req.poses[i].position.y, req.poses[i].position.z,
                             rpy[0], rpy[1], rpy[2]]
-        self.learn_dmp(trajectory, req.output_weight_file_name.data, req.n_dmps, req.n_bfs)
+        self.learn_dmp(trajectory, req.output_weight_file_name, req.n_dmps, req.n_bfs)
         rospy.loginfo("Successfully learned the motion primitive")
         # Return response 
         response = LearnDMPResponse()
-        response.result.data = self.result
+        response.result = self.result
         return response
 
     def learn_dmp(self, trajectory, file_name, n_dmps=6, n_bfs=50):
