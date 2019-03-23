@@ -5,3 +5,4 @@ float64 tau
 float64 dt
 ---
 string result
+CartesianTrajectory cart_traj
