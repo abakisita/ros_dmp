@@ -81,6 +81,7 @@ class GenerateMotionClass:
         response = GenerateMotionResponse()
         rospy.loginfo("Motion generated and published on respective toopics")
         response.result = "success"
+        response.cart_traj = cartesian_trajectory
         return response
 
 if __name__ == "__main__":
