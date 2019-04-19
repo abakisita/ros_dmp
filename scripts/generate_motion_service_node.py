@@ -11,7 +11,9 @@ import tf
 class GenerateMotionClass:
 
     def __init__(self):
+        '''' Ros action server for generating motion using DMPs
 
+        '''
         rospy.init_node("generate_motion_service_node")
         rospy.Service("generate_motion_service", GenerateMotion, self.generate_motion)
         rospy.loginfo("Started Motion Generation Service")
@@ -20,7 +22,10 @@ class GenerateMotionClass:
         self.path_pub = rospy.Publisher('~cartesian_path', Path, queue_size=1)
 
     def generate_motion(self, req):
+        ''' Generates trajectory upon request
 
+        req: request meassage
+        '''
         rospy.loginfo("Received motion generation request")
         # Initial pose
         rpy = tf.transformations.euler_from_quaternion([req.initial_pose.pose.orientation.x, req.initial_pose.pose.orientation.y,

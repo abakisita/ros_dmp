@@ -20,12 +20,14 @@ if __name__ == "__main__":
     o_z = np.linspace(0, 1)
     o_w = np.linspace(0, 1)
 
+    # Compose service request
     req.header.frame_id = 'base_link'
     req.output_weight_file_name = 'example.yaml'
     req.dmp_name = 'square_wave'
     req.header.stamp = rospy.Time.now()
     req.n_bfs = 500
     req.n_dmps = 6
+
     for i in range(x.shape[0]):
         pose = Pose()
         pose.position.x = x[i]
@@ -36,9 +38,10 @@ if __name__ == "__main__":
         pose.orientation.z = o_z[i]
         pose.orientation.w = o_w[i]
         req.poses.append(pose)
+
+    # Call the service
     try:
         service_client = rospy.ServiceProxy('/learn_dynamic_motion_primitive_service', LearnDMP)
         rospy.loginfo(service_client(req))
     except :
         rospy.loginfo("Service call failed")
-    
